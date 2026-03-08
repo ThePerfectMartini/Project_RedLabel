@@ -13,9 +13,9 @@ MonoBehaviour:
   m_Name: PlayerStats
   m_EditorClassIdentifier: Assembly-CSharp::CharacterData
   maxHealth: 100
-  moveSpeed: 3
-  jumpForce: 7
-  runSpeed: 7.01
+  moveSpeed: 5
+  jumpForce: 15
+  runSpeed: 10
   attackDamage: 10
   attackRadius: 1.5
   comboWindow: 0.8

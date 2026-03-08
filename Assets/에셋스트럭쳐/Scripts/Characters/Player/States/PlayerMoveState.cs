@@ -1,43 +1,62 @@
+using Unity.VisualScripting;
 using UnityEngine;
 
-public class PlayerMoveState : State
+public class PlayerMoveState : PlayerState
 {
-    private readonly Player _player;
-    private readonly PlayerStateMachine _stateMachine;
-
-    public PlayerMoveState(Player player, PlayerStateMachine stateMachine)
-        : base(player, stateMachine)
+    Vector2 input;
+    public PlayerMoveState(Player player, PlayerStateMachine stateMachine, string animName)
+        : base(player, stateMachine, animName)
     {
-        this._player = player;
-        this._stateMachine = stateMachine;
+        this.Player = player;
+        this.StateMachine = stateMachine;
+        AnimHash = Animator.StringToHash(animName);
+    }
+    
+    public override void Enter()
+    {
+        base.Enter();
+        
+        Player.playerAnimationController.PlayAnimation(AnimHash);
     }
 
     public override void LogicUpdate()
     {
         base.LogicUpdate();
-
+        
         // 1. 입력값
-        Vector2 input = _player.inputHandler.MoveInput;
-
-        // 2. [변경점] Movement 컴포넌트를 통해 이동 명령
-        _player.movement.Move(input, _player.characterData.moveSpeed);
+        input = Player.inputHandler.MoveInput;
 
         // 3. 상태 전이
         if (input == Vector2.zero)
         {
-            _stateMachine.ChangeState(_stateMachine.IdleState);
+            StateMachine.ChangeState(StateMachine.idleState);
         }
 
         // [점프] CheckIfGrounded도 Movement에 있는 것을 사용
-        if (_player.inputHandler.JumpTriggered && _player.movement.CheckIfGrounded())
+        if (Player.inputHandler.JumpTriggered && Player.movement.CheckIfGrounded())
         {
-            _stateMachine.ChangeState(_stateMachine.JumpState);
+            StateMachine.ChangeState(StateMachine.jumpState);
         }
 
         // [달리기]
-        if (_player.inputHandler.runTriggered)
+        if (Player.inputHandler.runTriggered)
         {
-            _stateMachine.ChangeState(_stateMachine.RunState);
+            StateMachine.ChangeState(StateMachine.runState);
         }
+        
+        // [공격]
+        if (Player.inputHandler.AttackTriggered)
+        {
+            StateMachine.ChangeState(StateMachine.attackState);
+        }
+    }
+
+    public override void PhysicsUpdate()
+    {
+        base.PhysicsUpdate();
+
+
+        // 2. [변경점] Movement 컴포넌트를 통해 이동 명령
+        Player.movement.Move(input, Player.characterData.moveSpeed);
     }
 }

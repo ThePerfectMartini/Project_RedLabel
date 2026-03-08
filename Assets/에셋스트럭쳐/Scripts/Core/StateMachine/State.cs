@@ -18,4 +18,6 @@ public abstract class State
     public virtual void LogicUpdate() {} // Update
 
     public virtual void PhysicsUpdate() {} // FixedUpdate
+    
+    public virtual void AnimationEndTrigger(){}
 }

@@ -1,9 +1,9 @@
 ﻿public abstract class StateMachine
 {
-    public State CurrentState { get; private set; }
-    public State PreviousState { get; private set; }
+    public State CurrentState { get; protected set; }
+    public State PreviousState { get; protected set; }
     
-    protected StateMachine(Player player)
+    protected StateMachine(Entity entity)
     {
         // 플레이어 스테이트에서 플레이어를 조작할수 있도록
         // 플레이어 컨트롤러를 매개변수로 받아 생성하도록 함

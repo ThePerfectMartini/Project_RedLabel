@@ -41,21 +41,18 @@ public class PlayerInputHandler : MonoBehaviour
             _inputActions.Player.Jump.started += ctx =>
             {
                 JumpTriggered = true;
-                Debug.Log("Input: Jump!"); // 테스트용 로그
             };
 
             // [공격]
             _inputActions.Player.Attack.started += ctx =>
             {
                 AttackTriggered = true;
-                Debug.Log("Input: Attack!");
             };
 
             // [패링]
             _inputActions.Player.Parry.started += ctx =>
             {
                 ParryTriggered = true;
-                Debug.Log("Input: Parry!");
             };
         }
 
@@ -82,7 +79,6 @@ public class PlayerInputHandler : MonoBehaviour
         if (Time.time - _lastTapTime < _tapThreshold && currentDirection == _lastTapDirection)
         {
             runTriggered = true;
-            Debug.Log("Input: Run Triggered! >>>>>");
         }
         else
         {

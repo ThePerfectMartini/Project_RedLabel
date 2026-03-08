@@ -8,7 +8,7 @@ public class PlayerAttack : MonoBehaviour
     [SerializeField] private InputReader inputReader; // InputActionReference 교체
 
     [Header("현재 장착된 공격 데이터")]
-    public AttackData currentAttack;
+    public AttackData_legacy currentAttack;
 
     [Header("환경 설정")]
     public LayerMask enemyLayer;
