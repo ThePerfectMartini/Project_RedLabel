@@ -1,0 +1,19 @@
+using UnityEngine;
+using UnityEngine.SceneManagement; 
+
+public class MainMenu : MonoBehaviour
+{
+	
+	public void PlayGame()
+	{
+		
+		SceneManager.LoadScene("SampleScene");
+	}
+
+	
+	public void QuitGame()
+	{
+		Debug.Log("게임 종료!");
+		Application.Quit(); 
+	}
+}
