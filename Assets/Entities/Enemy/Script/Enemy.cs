@@ -1,4 +1,5 @@
 ﻿using UnityEngine;
+using UnityEngine.UI;
 
 public class Enemy : Entity
 {
@@ -10,8 +11,13 @@ public class Enemy : Entity
     
     // 범용 스크립트
     public AnimationController animationController;
-    
-    protected override void Awake()
+
+	[Header("UI")]
+	public Image hpFillImage; 
+	private float targetFillAmount = 1f;
+	public float hpLerpSpeed = 5f; 
+
+	protected override void Awake()
     {
         base.Awake();
         StateMachine = new EnemyStateMachine(this);
@@ -27,12 +33,20 @@ public class Enemy : Entity
     {
         base.Start();
         StateMachine.Initialize(StateMachine.IdleState);
+
+        UpdateHPBar();
     }
 
     private void Update()
     {
         StateMachine.CurrentState.LogicUpdate();
-    }
+
+		// 매 프레임마다 체력바가 스르륵 부드럽게 깎이도록 연출 (Lerp)
+		if (hpFillImage != null && hpFillImage.fillAmount != targetFillAmount)
+		{
+			hpFillImage.fillAmount = Mathf.Lerp(hpFillImage.fillAmount, targetFillAmount, Time.deltaTime * hpLerpSpeed);
+		}
+	}
 
     private void FixedUpdate()
     {
@@ -52,6 +66,9 @@ public class Enemy : Entity
         {
             StateMachine.ChangeState(StateMachine.HitState);
         }
+
+        UpdateHPBar();
+
         Debug.Log($"[{gameObject.name}] 피격! 받은 데미지: {hitData.damage} / 남은 체력: {currentHealth}");
     }
 
@@ -64,4 +81,13 @@ public class Enemy : Entity
         
         base.Die(); 
     }
+	// 적의 체력 비율을 계산하는 함수 추가
+	private void UpdateHPBar()
+	{
+		if (hpFillImage != null)
+		{
+			targetFillAmount = (float)currentHealth / (float)maxHealth;
+		}
+	}
+
 }

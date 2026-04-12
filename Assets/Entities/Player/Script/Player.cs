@@ -48,10 +48,16 @@ public class Player : Entity
         InputHandler?.Disable();
     }
 
-    private void Update()
-    {
-        StateMachine.CurrentState.LogicUpdate();
-    }
+	private void Update()
+	{
+		
+		StateMachine.CurrentState.LogicUpdate();
+
+		if (hpFillImage != null && hpFillImage.fillAmount != targetFillAmount)
+		{
+			hpFillImage.fillAmount = Mathf.Lerp(hpFillImage.fillAmount, targetFillAmount, Time.deltaTime * hpLerpSpeed);
+		}
+	}
 
     private void FixedUpdate()
     {
@@ -79,7 +85,9 @@ public class Player : Entity
         // 부모의 Die 로직(Destroy)을 실행하여 오브젝트를 파괴합니다.
         base.Die(); 
     }
-
+	
+    private float targetFillAmount = 1f; 
+	public float hpLerpSpeed = 5f;
 
 	// 체력바 UI를 업데이트하는 전용 함수 추가
 	private void UpdateHPBar()
@@ -87,7 +95,7 @@ public class Player : Entity
 		if (hpFillImage != null)
 		{
 
-			hpFillImage.fillAmount = currentHealth / maxHealth;
+			targetFillAmount = (float)currentHealth / (float)maxHealth;
 		}
 	}
 }
