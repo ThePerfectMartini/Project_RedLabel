@@ -6,6 +6,7 @@ using UnityEngine.UI;
 [RequireComponent(typeof(PlayerMovementController))]
 public class Player : Entity
 {
+	
     public PlayerStateMachine StateMachine { get; private set; }
     public PlayerInputHandler InputHandler { get; private set; }
     public PlayerMovementController movement;
@@ -15,7 +16,7 @@ public class Player : Entity
     
     public float moveSpeed = 5f;
     public float runSpeed = 10f;
-
+    
 	[Header("UI")]
 	public Image hpFillImage;//체력바 이미지 변수 추가
 
