@@ -5,21 +5,22 @@ public class Enemy : Entity
     // 전용 스크립트
     public EnemyStateMachine StateMachine { get; private set; }
     public EnemyCombatController combatController;
-    public EnemyMovementController movementController; // 추가됨
+    
     public EnemyAI aiController; // 추가됨
     
     // 범용 스크립트
+    public MovementModule Movement;
     public AnimationController animationController;
     
     protected override void Awake()
     {
         base.Awake();
         StateMachine = new EnemyStateMachine(this);
+        Movement = new MovementModule(GetComponent<Rigidbody>(), transform);
+        
         animationController = GetComponentInChildren<AnimationController>();
         combatController = GetComponent<EnemyCombatController>();
         
-        // 추가: 컴포넌트 연결
-        movementController = GetComponent<EnemyMovementController>();
         aiController = GetComponent<EnemyAI>();
     }
     
@@ -60,7 +61,7 @@ public class Enemy : Entity
         Debug.Log($"[{gameObject.name}] 체력이 모두 소진되어 사망했습니다!");
         
         // 사망 시 미끄러지지 않도록 정지
-        if (movementController != null) movementController.StopImmediately();
+        if (Movement != null) Movement.StopImmediately();
         
         base.Die(); 
     }

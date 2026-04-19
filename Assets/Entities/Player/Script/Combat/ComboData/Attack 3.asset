@@ -15,7 +15,7 @@ MonoBehaviour:
   animationName: Attack 3
   attackBoxSize: {x: 2, y: 2, z: 3}
   attackOffset: {x: 1.5, y: 0, z: 0}
-  thrustPower: 3
+  thrustPower: 5
   damage: 10
   knockbackPower: 1
   launchPower: 5

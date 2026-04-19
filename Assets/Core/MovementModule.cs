@@ -1,17 +1,22 @@
 ﻿using UnityEngine;
 
-public class EnemyMovementController : MonoBehaviour
+[RequireComponent(typeof(Rigidbody))]
+public class MovementModule
 {
     private Rigidbody RB;
+    private Transform transform; // 회전을 위해 Transform 참조 보관
     private Vector3 workspace; 
     public int FacingDirection { get; private set; } = 1; 
 
-    private void Awake()
+    public MovementModule(Rigidbody rb, Transform enemyTransform)
     {
-        RB = GetComponent<Rigidbody>();
+        this.RB = rb;
+        this.transform = enemyTransform;
     }
 
-    // AI가 계산한 3D 방향(X, 0, Z)을 받아 이동과 방향 전환을 동시에 처리합니다.
+    /// <summary>
+    /// 외부에서 주어진 방향(direction)과 속도(speed)로 물리적 이동을 수행합니다.
+    /// </summary>
     public void Move(Vector3 direction, float speed)
     {
         // X, Z 방향으로 이동하되 현재의 중력(Y)은 유지합니다.
@@ -54,4 +59,5 @@ public class EnemyMovementController : MonoBehaviour
         FacingDirection *= -1;
         transform.Rotate(0.0f, 180.0f, 0.0f);
     }
+
 }

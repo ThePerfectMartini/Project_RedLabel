@@ -18,7 +18,7 @@ public class EnemyMoveState : EnemyState
     {
         base.Exit();
         // 이동 상태가 끝날 때 컨트롤러를 통해 즉시 정지시킵니다.
-        Enemy.movementController.StopImmediately();
+        Enemy.Movement.StopImmediately();
     }
 
     public override void LogicUpdate()
@@ -34,6 +34,6 @@ public class EnemyMoveState : EnemyState
         Vector3 direction = Enemy.aiController.Get8WayDirectionToTarget();
 
         // 2. 이동 컨트롤러에게 이동과 방향 전환(Flip) 처리를 맡깁니다.
-        Enemy.movementController.Move(direction, moveSpeed);
+        Enemy.Movement.Move(direction, moveSpeed);
     }
 }

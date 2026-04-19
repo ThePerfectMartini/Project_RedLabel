@@ -12,7 +12,7 @@ public class PlayerMovementController : MonoBehaviour
     [Header("Checks")]
     public Transform groundCheck; 
     public float groundCheckRadius = 0.3f;
-    public LayerMask whatIsGround; 
+    public LayerMask whatIsGround;
     
     private void Awake()
     {

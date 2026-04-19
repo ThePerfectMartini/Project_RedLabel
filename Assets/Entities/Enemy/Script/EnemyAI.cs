@@ -65,7 +65,7 @@ public class EnemyAI : MonoBehaviour
                     enemy.StateMachine.ChangeState(enemy.StateMachine.IdleState);
                 
                 Vector3 directionToTarget = Get8WayDirectionToTarget();
-                enemy.movementController.FaceTarget(directionToTarget);
+                enemy.Movement.FaceTarget(directionToTarget);
             }
         }
         // 2순위: 감지 범위 내 -> 추격(Move)
