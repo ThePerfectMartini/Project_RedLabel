@@ -1,0 +1,73 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 862587ca3bdf47cbbc0bc89990afa31f, type: 3}
+  m_Name: NewActionSequence
+  m_EditorClassIdentifier: Assembly-CSharp::ActionSequenceSO
+  isInfiniteLoop: 1
+  repeatCount: 1
+  actions:
+  - showGizmo: 0
+    actionType: 2
+    targetType: 0
+    targetPosition: {x: 0, y: 0, z: 0}
+    targetTag: 
+    offset: {x: 0, y: 0, z: 0}
+    startSpeed: 0
+    speed: 0.01
+    useAcceleration: 0
+    acceleration: 0.01
+    stopOnTargetReached: 0
+    stopDistance: 0
+    stopOnTimeLimit: 0
+    timeLimit: 1
+  - showGizmo: 1
+    actionType: 1
+    targetType: 0
+    targetPosition: {x: 1, y: 1, z: 1}
+    targetTag: Player
+    offset: {x: 1, y: 1, z: 1}
+    startSpeed: 6
+    speed: 3
+    useAcceleration: 1
+    acceleration: 3
+    stopOnTargetReached: 1
+    stopDistance: 1
+    stopOnTimeLimit: 0
+    timeLimit: 2
+  - showGizmo: 1
+    actionType: 0
+    targetType: 1
+    targetPosition: {x: 0, y: 1, z: 0}
+    targetTag: Player
+    offset: {x: 0, y: 0, z: 0}
+    startSpeed: 0
+    speed: 5
+    useAcceleration: 0
+    acceleration: 0.01
+    stopOnTargetReached: 1
+    stopDistance: 1
+    stopOnTimeLimit: 1
+    timeLimit: 1
+  - showGizmo: 0
+    actionType: 1
+    targetType: 0
+    targetPosition: {x: 0, y: 1, z: 0}
+    targetTag: Player
+    offset: {x: 0, y: 0, z: 0}
+    startSpeed: 0
+    speed: 5
+    useAcceleration: 0
+    acceleration: 0.01
+    stopOnTargetReached: 1
+    stopDistance: 1
+    stopOnTimeLimit: 0
+    timeLimit: 2
