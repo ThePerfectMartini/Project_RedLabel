@@ -13,9 +13,11 @@ public class EnemyAttackState : EnemyState
         Enemy.animationController.Play("Attack");
         Enemy.animationController.OnAnimEnded += AttackEnded;
         Enemy.animationController.OnAttackHitCheck += TriggerHitCheck;
-    }
-    
-    private void AttackEnded()
+		Enemy.audioManager.PlayAttackSound();//공격소리를 재생
+
+	}
+
+	private void AttackEnded()
     {
         Enemy.StateMachine.ChangeState(StateMachine.IdleState);
     }

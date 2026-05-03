@@ -12,7 +12,8 @@ public class PlayerHitState : PlayerState
         
         Player.animationController.Play("Hit");
         Player.animationController.OnAnimEnded += HitEnded;
-    }
+		Player.audioManager.PlayHitSound();//피격 사운드 추가
+	}
     
     private void HitEnded()
     {

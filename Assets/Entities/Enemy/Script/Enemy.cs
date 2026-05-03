@@ -12,6 +12,7 @@ public class Enemy : Entity
     // 범용 스크립트
     public MovementModule Movement;
     public AnimationController animationController;
+	public EnemyAudioManager audioManager; // 오디오 매니저 추가
 
 	[Header("UI")]
 	public Image hpFillImage; 
@@ -26,9 +27,10 @@ public class Enemy : Entity
         
         animationController = GetComponentInChildren<AnimationController>();
         combatController = GetComponent<EnemyCombatController>();
-        
         aiController = GetComponent<EnemyAI>();
-    }
+
+		audioManager = GetComponent<EnemyAudioManager>();//오디어 매니저 연결
+	}
     
     protected override void Start()
     {
@@ -57,8 +59,13 @@ public class Enemy : Entity
     public override void TakeDamage(HitData hitData)
     {
         base.TakeDamage(hitData);
-        
-        if (StateMachine.CurrentState == StateMachine.HitState)
+
+		if (audioManager != null)
+		{
+			audioManager.PlayHitSound(); // 히트시 무조건 피격음을 냄
+		}
+
+		if (StateMachine.CurrentState == StateMachine.HitState)
         {
             EnemyHitState hitState = (EnemyHitState)StateMachine.CurrentState;
             hitState.AnimationReset();

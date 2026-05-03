@@ -14,9 +14,10 @@ public class PlayerAttackState : PlayerState
         base.Enter();
         
         Player.movement.StopImmediately();
+		Player.audioManager.PlayAttackSound();//공격소리를 재생
 
-        // 상태 진입 시 항상 1타(인덱스 0)부터 시작하고, 선입력을 초기화합니다.
-        _comboStep = 0; 
+		// 상태 진입 시 항상 1타(인덱스 0)부터 시작하고, 선입력을 초기화합니다.
+		_comboStep = 0; 
         _isNextAttackBuffered = false;
 
         // 애니메이션 이벤트 및 입력 이벤트 구독

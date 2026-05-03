@@ -112,7 +112,7 @@ AnimationClip:
   m_PPtrCurves:
   - serializedVersion: 2
     curve:
-    - time: 0
+    - time: 0.033333335
       value: {fileID: -2079711996, guid: 206232532f45554499c708fa086ff47f, type: 3}
     - time: 0.16666667
       value: {fileID: -907512336, guid: 66a12ed0238615843bfd2092235c5371, type: 3}
@@ -345,6 +345,13 @@ AnimationClip:
   m_Events:
   - time: 0.16666667
     functionName: OnAttackTriggered
+    data: 
+    objectReferenceParameter: {fileID: 0}
+    floatParameter: 0
+    intParameter: 0
+    messageOptions: 0
+  - time: 0.16666667
+    functionName: PlayAttackSound
     data: 
     objectReferenceParameter: {fileID: 0}
     floatParameter: 0
