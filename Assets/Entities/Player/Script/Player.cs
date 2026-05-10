@@ -11,8 +11,9 @@ public class Player : Entity
     public PlayerInputHandler InputHandler { get; private set; }
     public PlayerMovementController movement;
     public PlayerCombatController combatController;
-    
-    public AnimationController animationController;
+    public PlayerAudioManager audioManager;//사운드 매니저 연결 함수
+
+	public AnimationController animationController;
     
     public float moveSpeed = 5f;
     public float runSpeed = 10f;

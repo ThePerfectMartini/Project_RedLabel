@@ -1,30 +1,29 @@
 using UnityEngine;
-using UnityEngine.UI; 
+using UnityEngine.UI;
+using UnityEngine.Audio;
 
 public class VolumeController : MonoBehaviour
 {
-	[Header("연결할 설정들")]
-	public AudioSource bgmAudioSource; // BGM 스피커
-	public Slider volumeSlider;        // 슬라이더
+	[Header("오디오 믹서 연결")]
+	public AudioMixer audioMixer;
 
-	void Start()
+	[Header("UI 슬라이더 연결")]
+	public Slider bgmSlider;
+	public Slider seSlider;
+
+	// BGM 슬라이더 조절 시 실행되는 함수
+	public void SetBGMVolume(float sliderValue)
 	{
-		// 게임 시작 시, 슬라이더의 위치를 현재 음악 볼륨과 똑같이 맞춰줍니다.
-		if (bgmAudioSource != null && volumeSlider != null)
-		{
-			// 슬라이더의 최소/최대값 설정 (볼륨은 0부터 1 사이입니다)
-			volumeSlider.minValue = 0f;
-			volumeSlider.maxValue = 1f;
-			volumeSlider.value = bgmAudioSource.volume;
-		}
+		// 값이 0이 되면 소리가 완전히 꺼지도록 -80dB로 설정, 아니면 데시벨 공식 적용
+		float volume = (sliderValue <= 0.0001f) ? -80f : Mathf.Log10(sliderValue) * 20f;
+		audioMixer.SetFloat("BGMVolume", volume);
 	}
 
-	// 슬라이더를 마우스로 끌어서 움직일 때마다 이 함수가 실행됩니다!
-	public void SetVolume(float sliderValue)
+	// SE 슬라이더 조절 시 실행되는 함수
+	public void SetSEVolume(float sliderValue)
 	{
-		if (bgmAudioSource != null)
-		{
-			bgmAudioSource.volume = sliderValue; // 음악 볼륨을 슬라이더 값으로 변경!
-		}
+		// 값이 0이 되면 소리가 완전히 꺼지도록 -80dB로 설정, 아니면 데시벨 공식 적용
+		float volume = (sliderValue <= 0.0001f) ? -80f : Mathf.Log10(sliderValue) * 20f;
+		audioMixer.SetFloat("SEVolume", volume);
 	}
 }

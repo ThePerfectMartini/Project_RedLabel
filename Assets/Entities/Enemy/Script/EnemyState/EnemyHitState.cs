@@ -12,7 +12,8 @@ public class EnemyHitState : EnemyState
 
         Enemy.animationController.Play("Hit");
         Enemy.animationController.OnAnimEnded += HitEnded;
-    }
+
+	}
 
     public void AnimationReset()
     {

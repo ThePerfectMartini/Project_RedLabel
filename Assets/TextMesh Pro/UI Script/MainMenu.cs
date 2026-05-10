@@ -16,4 +16,10 @@ public class MainMenu : MonoBehaviour
 		Debug.Log("게임 종료!");
 		Application.Quit(); 
 	}
+
+	public void ReturnMenu()
+	{
+
+		SceneManager.LoadScene("MainMenu");
+	}
 }
