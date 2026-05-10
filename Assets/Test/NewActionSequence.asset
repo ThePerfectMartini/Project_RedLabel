@@ -15,59 +15,105 @@ MonoBehaviour:
   isInfiniteLoop: 1
   repeatCount: 1
   actions:
-  - showGizmo: 0
-    actionType: 2
+  - showGizmo: 1
+    actionType: 0
+    executeParallel: 0
+    playAnimation: 1
+    animationName: Move
+    targetType: 1
+    targetPosition: {x: 0, y: 1, z: 0}
+    targetTag: Player
+    trackXOnly: 0
+    trackZOnly: 0
+    targetGizmoShape: 0
+    moveDirection: {x: 0, y: 0, z: 1}
+    offset: {x: 1, y: 0, z: 0}
+    trackMargin: 0.5
+    startSpeed: 0
+    speed: 3
+    useAcceleration: 0
+    acceleration: 0.01
+    stopOnTargetReached: 1
+    distanceMode: 1
+    targetShape: 1
+    shapeOffset: {x: 0, y: 0, z: 0}
+    stopDistance: 1.24
+    attackBoxSize: {x: 1, y: 1, z: 1}
+    stopOnTimeLimit: 1
+    timeLimit: 5
+    damage: 0
+    knockbackForce: {x: 15, y: 5, z: 15}
+    attackShape: 0
+    attackRadius: 0
+    attackHitBoxSize: {x: 0, y: 0, z: 0}
+    attackOffset: {x: 0, y: 0, z: 0}
+    useWaitAfterAnimation: 0
+    waitDuration: 0
+  - showGizmo: 1
+    actionType: 3
+    executeParallel: 0
+    playAnimation: 1
+    animationName: Attack
     targetType: 0
-    targetPosition: {x: 0, y: 0, z: 0}
+    targetPosition: {x: 0, y: 1, z: 0}
     targetTag: 
-    offset: {x: 0, y: 0, z: 0}
+    trackXOnly: 0
+    trackZOnly: 0
+    targetGizmoShape: 0
+    moveDirection: {x: 0, y: 0, z: 1}
+    offset: {x: 1, y: 0, z: 0}
+    trackMargin: 0
     startSpeed: 0
     speed: 0.01
     useAcceleration: 0
     acceleration: 0.01
     stopOnTargetReached: 0
+    distanceMode: 0
+    targetShape: 0
+    shapeOffset: {x: 0, y: 0, z: 0}
     stopDistance: 0
+    attackBoxSize: {x: 0, y: 0, z: 0}
     stopOnTimeLimit: 0
-    timeLimit: 1
+    timeLimit: 5
+    damage: 100
+    knockbackForce: {x: 15, y: 10, z: 0}
+    attackShape: 1
+    attackRadius: 1
+    attackHitBoxSize: {x: 2, y: 2, z: 2}
+    attackOffset: {x: -2, y: 0, z: 0}
+    useWaitAfterAnimation: 0
+    waitDuration: 0
   - showGizmo: 1
-    actionType: 1
-    targetType: 0
-    targetPosition: {x: 1, y: 1, z: 1}
-    targetTag: Player
-    offset: {x: 1, y: 1, z: 1}
-    startSpeed: 6
-    speed: 3
-    useAcceleration: 1
-    acceleration: 3
-    stopOnTargetReached: 1
-    stopDistance: 1
-    stopOnTimeLimit: 0
-    timeLimit: 2
-  - showGizmo: 1
-    actionType: 0
-    targetType: 1
-    targetPosition: {x: 0, y: 1, z: 0}
-    targetTag: Player
-    offset: {x: 0, y: 0, z: 0}
-    startSpeed: 0
-    speed: 5
-    useAcceleration: 0
-    acceleration: 0.01
-    stopOnTargetReached: 1
-    stopDistance: 1
-    stopOnTimeLimit: 1
-    timeLimit: 1
-  - showGizmo: 0
-    actionType: 1
+    actionType: 2
+    executeParallel: 0
+    playAnimation: 1
+    animationName: Idle
     targetType: 0
     targetPosition: {x: 0, y: 1, z: 0}
-    targetTag: Player
-    offset: {x: 0, y: 0, z: 0}
+    targetTag: 
+    trackXOnly: 0
+    trackZOnly: 0
+    targetGizmoShape: 0
+    moveDirection: {x: 0, y: 0, z: 1}
+    offset: {x: 1, y: 0, z: 0}
+    trackMargin: 0
     startSpeed: 0
-    speed: 5
+    speed: 0.01
     useAcceleration: 0
     acceleration: 0.01
-    stopOnTargetReached: 1
-    stopDistance: 1
+    stopOnTargetReached: 0
+    distanceMode: 0
+    targetShape: 0
+    shapeOffset: {x: 0, y: 0, z: 0}
+    stopDistance: 0
+    attackBoxSize: {x: 0, y: 0, z: 0}
     stopOnTimeLimit: 0
-    timeLimit: 2
+    timeLimit: 5
+    damage: 0
+    knockbackForce: {x: 15, y: 5, z: 15}
+    attackShape: 0
+    attackRadius: 0
+    attackHitBoxSize: {x: 0, y: 0, z: 0}
+    attackOffset: {x: 0, y: 0, z: 0}
+    useWaitAfterAnimation: 0
+    waitDuration: 0

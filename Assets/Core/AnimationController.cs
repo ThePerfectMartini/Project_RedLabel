@@ -6,6 +6,7 @@ public class AnimationController : MonoBehaviour
     public event Action OnAnimEnded;
     public event Action OnAttackHitCheck;
     public Animator animator;
+    private AttackCaster attackCaster;
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
     {
@@ -21,6 +22,7 @@ public class AnimationController : MonoBehaviour
     private void Awake()
     {
         animator = GetComponent<Animator>();
+        attackCaster = GetComponentInParent<AttackCaster>();
     }
 
     public void Play(string animationName)
@@ -44,7 +46,13 @@ public class AnimationController : MonoBehaviour
         OnAttackHitCheck?.Invoke();
     }
     
-    
+    public void OnAttackImpact()
+    {
+        if (attackCaster != null)
+        {
+            attackCaster.CastDamage();
+        }
+    }
     
     
     public float GetAnimationLength(string clipName)
