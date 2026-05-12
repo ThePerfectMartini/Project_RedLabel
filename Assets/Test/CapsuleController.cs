@@ -17,7 +17,6 @@ public class CapsuleController : MonoBehaviour
 
     private ActionState currentState;
     
-    // 현재 실행 중인 액션들을 추적하기 위한 컬렉션 (기즈모 표시 등에 활용)
     private HashSet<ActionData> activeActions = new HashSet<ActionData>();
 
     private void Awake()
@@ -73,7 +72,6 @@ public class CapsuleController : MonoBehaviour
         }
     }
 
-    // 액션의 시작과 끝을 추적하여 activeActions에 등록/해제하는 코루틴 래퍼
     private IEnumerator ExecuteStateCoroutine(ActionData action, ActionState newState)
     {
         activeActions.Add(action);
@@ -91,37 +89,33 @@ public class CapsuleController : MonoBehaviour
             case ActionType.Move: return new MoveState(this, action);
             case ActionType.Teleport: return new TeleportState(this, action);
             case ActionType.Wait: return new WaitState(this, action);
-            case ActionType.Attack: return new AttackState(this, action);
+            // ▼ 두 가지 액션 타입 모두 동일한 AttackState로 할당 (내부에서 고정/변동 분리 처리)
+            case ActionType.VariableAttack: 
+            case ActionType.FixedAttack: return new AttackState(this, action);
+            case ActionType.RangedAttack: return new RangedAttackState(this, action); 
             default: return null;
         }
     }
 
-    // 이동 방향에 맞춰 캐릭터를 Y축 기준으로 회전시키는 함수
     private void UpdateFacingDirection(float xDir)
     {
         if (Mathf.Abs(xDir) > 0.01f)
         {
-            // 오른쪽(양수)일 때는 180도, 왼쪽(음수)일 때는 0도로 회전
             float yRotation = xDir > 0 ? 180f : 0f;
             transform.rotation = Quaternion.Euler(0, yRotation, 0);
         }
     }
 
-    // ▼ 이동할 방향을 가장 가까운 8방향(45도 간격)으로 고정(스냅)해 주는 함수
     private Vector3 Get8Direction(Vector3 dir)
     {
         Vector3 flatDir = new Vector3(dir.x, 0, dir.z);
-        if (flatDir.sqrMagnitude < 0.001f) return dir.normalized; // 방향이 없거나 완전히 수직인 경우 무시
+        if (flatDir.sqrMagnitude < 0.001f) return dir.normalized; 
 
-        // X, Z 축 기준으로 각도를 구해 45도 단위로 반올림
         float angle = Mathf.Atan2(flatDir.z, flatDir.x) * Mathf.Rad2Deg;
         float snappedAngle = Mathf.Round(angle / 45f) * 45f;
         float rad = snappedAngle * Mathf.Deg2Rad;
 
-        // 8방향에 해당하는 새로운 벡터 생성
         Vector3 snappedDir = new Vector3(Mathf.Cos(rad), 0f, Mathf.Sin(rad));
-        
-        // 기존 Y축(높이) 방향은 자연스럽게 유지
         snappedDir.y = dir.normalized.y; 
 
         return snappedDir.normalized;
@@ -136,10 +130,7 @@ public class CapsuleController : MonoBehaviour
         float currentSpeed = isAccelerated ? startSpeed : maxSpeed;
         float timer = 0f;
         
-        // 시작할 때부터 8방향으로 꺾인 벡터를 사용
         Vector3 normalizedDir = Get8Direction(direction.normalized);
-
-        // 이동 전 방향 업데이트
         UpdateFacingDirection(normalizedDir.x);
 
         while (true)
@@ -189,13 +180,10 @@ public class CapsuleController : MonoBehaviour
                 destination = targetPos - worldOffset;
             }
 
-            // ▼ 목적지까지의 방향을 계산하고 8방향으로 고정
             Vector3 dirToDest = destination - rb.position;
             float distToDest = dirToDest.magnitude;
             
             Vector3 moveDir = Get8Direction(dirToDest);
-
-            // 이동 전 방향 업데이트
             UpdateFacingDirection(moveDir.x);
 
             if (isAccelerated)
@@ -206,7 +194,6 @@ public class CapsuleController : MonoBehaviour
             float moveStep = currentSpeed * Time.fixedDeltaTime;
             Vector3 nextPos;
 
-            // 목적지에 거의 도달했을 때 8방향 스냅 때문에 목적지 주변을 맴도는 현상(Jittering) 방지
             if (distToDest <= moveStep)
             {
                 nextPos = destination;
@@ -264,13 +251,10 @@ public class CapsuleController : MonoBehaviour
             else if (!trackXOnly && trackZOnly)
                 destination.x = rb.position.x;
 
-            // ▼ 추적할 때의 방향도 계산하여 8방향으로 고정
             Vector3 dirToDest = destination - rb.position;
             float distToDest = dirToDest.magnitude;
 
             Vector3 moveDir = Get8Direction(dirToDest);
-
-            // 이동 전 방향 업데이트
             UpdateFacingDirection(moveDir.x);
 
             if (isAccelerated)
@@ -281,7 +265,6 @@ public class CapsuleController : MonoBehaviour
             float moveStep = currentSpeed * Time.fixedDeltaTime;
             Vector3 nextPos;
 
-            // 목적지에 거의 도달했을 때 맴도는 현상 방지 보정
             if (distToDest <= moveStep)
             {
                 nextPos = destination;
@@ -348,7 +331,6 @@ public class CapsuleController : MonoBehaviour
 
     public void TeleportToPosition(Vector3 targetPos)
     {
-        // 텔레포트 전 방향 업데이트
         UpdateFacingDirection((targetPos - rb.position).x);
 
         rb.linearVelocity = Vector3.zero; 
@@ -368,7 +350,6 @@ public class CapsuleController : MonoBehaviour
 
             Vector3 destination = targetPos + offset;
 
-            // 텔레포트 전 방향 업데이트
             UpdateFacingDirection((destination - rb.position).x);
 
             rb.linearVelocity = Vector3.zero;
@@ -384,33 +365,110 @@ public class CapsuleController : MonoBehaviour
         {
             if (!action.showGizmo) continue;
 
-            if (action.actionType == ActionType.Attack)
+            if (action.actionType == ActionType.RangedAttack)
             {
-                // 플레이 모드 중일 때는 해당 공격 액션이 활성화 상태일 때만 기즈모를 그림
-                // (에디터 모드일 때는 범위 세팅을 위해 항상 표시됨)
-                if (Application.isPlaying && !activeActions.Contains(action)) continue;
+                if (Application.isPlaying) continue;
+
+                Gizmos.color = Color.cyan;
+                Vector3 spawnPos = transform.position + (transform.rotation * action.attackOffset);
+                Gizmos.DrawWireSphere(spawnPos, 0.2f);
+                
+                Vector3 targetDir = transform.rotation * action.moveDirection.normalized;
+                
+                if (action.targetType == TargetType.TrackObject || action.targetType == TargetType.TrackObjectXOnly || action.targetType == TargetType.TrackObjectZOnly)
+                {
+                    if (!string.IsNullOrEmpty(action.targetTag))
+                    {
+                        GameObject t = GameObject.FindWithTag(action.targetTag);
+                        if (t != null) targetDir = (t.transform.position - spawnPos).normalized;
+                    }
+                }
+                else if (action.targetType == TargetType.SpecificPosition)
+                {
+                    targetDir = (action.targetPosition - spawnPos).normalized;
+                }
+                
+                if (targetDir == Vector3.zero) targetDir = transform.forward;
+                
+                DrawArrow(spawnPos, targetDir * 2f);
+                continue;
+            }
+
+            // ▼ 변동 좌표 / 고정 좌표 타격에 맞게 분기 수정
+            if (action.actionType == ActionType.VariableAttack || action.actionType == ActionType.FixedAttack)
+            {
+                if (Application.isPlaying) continue;
 
                 Gizmos.color = new Color(1f, 0f, 0f, 0.4f); 
                 
-                // 회전 기반 방식이므로 localScale은 제외하고 TRS 매트릭스 구성
-                Matrix4x4 rotationMatrix = Matrix4x4.TRS(transform.position, transform.rotation, Vector3.one);
-                Gizmos.matrix = rotationMatrix;
-                
-                Vector3 attackCenter = action.attackOffset;
+                if (action.actionType == ActionType.FixedAttack)
+                {
+                    Vector3 basePos = transform.position;
+                    
+                    if (action.targetType == TargetType.TrackObject || action.targetType == TargetType.TrackObjectXOnly || action.targetType == TargetType.TrackObjectZOnly)
+                    {
+                        if (!string.IsNullOrEmpty(action.targetTag))
+                        {
+                            GameObject tGO = GameObject.FindWithTag(action.targetTag);
+                            if (tGO != null) basePos = tGO.transform.position;
+                        }
+                    }
+                    else if (action.targetType == TargetType.SpecificPosition)
+                    {
+                        basePos = action.targetPosition;
+                    }
 
-                if (action.attackShape == AttackShape.Sphere)
-                {
-                    Gizmos.DrawWireSphere(attackCenter, action.attackRadius);
-                    Gizmos.color = Color.red;
-                    Gizmos.DrawSphere(attackCenter, action.attackRadius * 0.1f); 
+                    Vector3 attackCenter = basePos + action.offset;
+                    Gizmos.matrix = Matrix4x4.identity;
+
+                    if (action.attackShape == AttackShape.Sphere)
+                    {
+                        Gizmos.DrawWireSphere(attackCenter, action.attackRadius);
+                        Gizmos.color = Color.red;
+                        Gizmos.DrawSphere(attackCenter, action.attackRadius * 0.1f); 
+                    }
+                    else if (action.attackShape == AttackShape.Box)
+                    {
+                        Gizmos.DrawWireCube(attackCenter, action.attackHitBoxSize);
+                        Gizmos.color = new Color(1f, 0f, 0f, 0.1f); 
+                        Gizmos.DrawCube(attackCenter, action.attackHitBoxSize);
+                        Gizmos.color = Color.red;
+                        Gizmos.DrawCube(attackCenter, action.attackHitBoxSize * 0.05f); 
+                    }
+                    else if (action.attackShape == AttackShape.Cylinder)
+                    {
+                        DrawWireCylinder(attackCenter, action.attackRadius, action.attackHeight);
+                        Gizmos.color = Color.red;
+                        Gizmos.DrawSphere(attackCenter, action.attackRadius * 0.1f); 
+                    }
                 }
-                else if (action.attackShape == AttackShape.Box)
+                else
                 {
-                    Gizmos.DrawWireCube(attackCenter, action.attackHitBoxSize);
-                    Gizmos.color = new Color(1f, 0f, 0f, 0.1f); 
-                    Gizmos.DrawCube(attackCenter, action.attackHitBoxSize);
-                    Gizmos.color = Color.red;
-                    Gizmos.DrawCube(attackCenter, action.attackHitBoxSize * 0.05f); 
+                    Matrix4x4 rotationMatrix = Matrix4x4.TRS(transform.position, transform.rotation, Vector3.one);
+                    Gizmos.matrix = rotationMatrix;
+                    
+                    Vector3 attackCenter = action.attackOffset;
+
+                    if (action.attackShape == AttackShape.Sphere)
+                    {
+                        Gizmos.DrawWireSphere(attackCenter, action.attackRadius);
+                        Gizmos.color = Color.red;
+                        Gizmos.DrawSphere(attackCenter, action.attackRadius * 0.1f); 
+                    }
+                    else if (action.attackShape == AttackShape.Box)
+                    {
+                        Gizmos.DrawWireCube(attackCenter, action.attackHitBoxSize);
+                        Gizmos.color = new Color(1f, 0f, 0f, 0.1f); 
+                        Gizmos.DrawCube(attackCenter, action.attackHitBoxSize);
+                        Gizmos.color = Color.red;
+                        Gizmos.DrawCube(attackCenter, action.attackHitBoxSize * 0.05f); 
+                    }
+                    else if (action.attackShape == AttackShape.Cylinder)
+                    {
+                        DrawWireCylinder(attackCenter, action.attackRadius, action.attackHeight);
+                        Gizmos.color = Color.red;
+                        Gizmos.DrawSphere(attackCenter, action.attackRadius * 0.1f); 
+                    }
                 }
 
                 Gizmos.matrix = Matrix4x4.identity;
@@ -431,7 +489,7 @@ public class CapsuleController : MonoBehaviour
 
             Vector3 finalTargetPos = action.targetPosition;
 
-            if (action.targetType == TargetType.TrackObject)
+            if (action.targetType == TargetType.TrackObject || action.targetType == TargetType.TrackObjectXOnly || action.targetType == TargetType.TrackObjectZOnly)
             {
                 if (!string.IsNullOrEmpty(action.targetTag))
                 {
@@ -439,10 +497,12 @@ public class CapsuleController : MonoBehaviour
                     if (targetGO != null) 
                     {
                         Vector3 targetPos = targetGO.transform.position;
+                        bool trackX = action.targetType == TargetType.TrackObjectXOnly;
+                        bool trackZ = action.targetType == TargetType.TrackObjectZOnly;
 
-                        if (action.trackXOnly && !action.trackZOnly)
+                        if (trackX)
                             targetPos.z = transform.position.z;
-                        else if (!action.trackXOnly && action.trackZOnly)
+                        else if (trackZ)
                             targetPos.x = transform.position.x;
 
                         Gizmos.color = new Color(0.5f, 0.5f, 0.5f, 0.5f);
@@ -478,11 +538,14 @@ public class CapsuleController : MonoBehaviour
                 destination = finalTargetPos - worldOffset;
             }
 
-            if (action.targetType == TargetType.TrackObject)
+            if (action.targetType == TargetType.TrackObject || action.targetType == TargetType.TrackObjectXOnly || action.targetType == TargetType.TrackObjectZOnly)
             {
-                if (action.trackXOnly && !action.trackZOnly)
+                bool trackX = action.targetType == TargetType.TrackObjectXOnly;
+                bool trackZ = action.targetType == TargetType.TrackObjectZOnly;
+                
+                if (trackX)
                     destination.z = transform.position.z;
-                else if (!action.trackXOnly && action.trackZOnly)
+                else if (trackZ)
                     destination.x = transform.position.x;
             }
 
@@ -622,5 +685,34 @@ public class CapsuleController : MonoBehaviour
         
         Gizmos.DrawRay(pos + direction, right * arrowHeadLength);
         Gizmos.DrawRay(pos + direction, left * arrowHeadLength);
+    }
+
+    private void DrawWireCylinder(Vector3 center, float radius, float height)
+    {
+        float halfHeight = height * 0.5f;
+        Vector3 topCenter = center + Vector3.up * halfHeight;
+        Vector3 bottomCenter = center - Vector3.up * halfHeight;
+
+        DrawGizmoCircle(topCenter, radius);
+        DrawGizmoCircle(bottomCenter, radius);
+
+        Gizmos.DrawLine(topCenter + Vector3.right * radius, bottomCenter + Vector3.right * radius);
+        Gizmos.DrawLine(topCenter - Vector3.right * radius, bottomCenter - Vector3.right * radius);
+        Gizmos.DrawLine(topCenter + Vector3.forward * radius, bottomCenter + Vector3.forward * radius);
+        Gizmos.DrawLine(topCenter - Vector3.forward * radius, bottomCenter - Vector3.forward * radius);
+    }
+
+    private void DrawGizmoCircle(Vector3 center, float radius)
+    {
+        int segments = 24;
+        float angle = 0f;
+        Vector3 lastPoint = center + new Vector3(Mathf.Cos(0) * radius, 0, Mathf.Sin(0) * radius);
+        for (int i = 1; i <= segments; i++)
+        {
+            angle += (360f / segments) * Mathf.Deg2Rad;
+            Vector3 nextPoint = center + new Vector3(Mathf.Cos(angle) * radius, 0, Mathf.Sin(angle) * radius);
+            Gizmos.DrawLine(lastPoint, nextPoint);
+            lastPoint = nextPoint;
+        }
     }
 }
