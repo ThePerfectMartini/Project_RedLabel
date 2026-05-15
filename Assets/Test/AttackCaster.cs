@@ -1,4 +1,4 @@
-﻿using System.Collections;
+using System.Collections;
 using UnityEngine;
 
 public class AttackCaster : MonoBehaviour
@@ -109,7 +109,7 @@ public class AttackCaster : MonoBehaviour
         for (int i = 0; i < count; i++)
         {
             Vector3 spawnPos = transform.position + (transform.rotation * data.attackOffset);
-            Vector3 shootDir = transform.rotation * data.moveDirection.normalized; 
+            Vector3 shootDir = transform.rotation * CapsuleController.GetDirectionFromEnum(data.moveDirection8);
             
             // ▼ 버그 수정 3: 매 발사 시점마다 타겟의 최신 위치를 새로 찾아서 방향을 갱신합니다.
             if (data.targetType == TargetType.TrackObject || data.targetType == TargetType.TrackObjectXOnly || data.targetType == TargetType.TrackObjectZOnly)

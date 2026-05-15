@@ -166,208 +166,214 @@ public class CapsuleController : MonoBehaviour
             }
 
             Vector3 nextPos = rb.position + (normalizedDir * currentSpeed * Time.fixedDeltaTime);
-            // 방향 이동에서도 y축은 변하지 않도록 고정
-            nextPos.y = rb.position.y;
             rb.MovePosition(nextPos);
             
             yield return new WaitForFixedUpdate();
         }
     }
 
-    public Vector3 GetOffsetPosition(Vector3 currentPos, Vector3 targetPos, Vector3 offset)
+    public IEnumerator MoveToPosition(Vector3 targetPos, float startSpeed, float maxSpeed, bool isAccelerated, float accel, bool checkTarget, float stopDist, bool checkTime, float timeLimit, DistanceCheckMode distanceMode, TargetShape targetShape, Vector3 shapeOffset, Vector3 attackBoxSize)
     {
-        float signX = (targetPos.x == currentPos.x) ? 0f : Mathf.Sign(targetPos.x - currentPos.x);
-        float signZ = (targetPos.z == currentPos.z) ? 0f : Mathf.Sign(targetPos.z - currentPos.z);
-        
-        return new Vector3(
-            targetPos.x - (signX * offset.x),
-            targetPos.y, // Y는 항상 0으로 고정됨 (호출 전 설정)
-            targetPos.z - (signZ * offset.z)
-        );
-    }
+        maxSpeed = Mathf.Max(0.01f, maxSpeed);
+        startSpeed = Mathf.Max(0f, startSpeed);
+        if (isAccelerated) accel = Mathf.Max(0.01f, accel);
 
-    public IEnumerator MoveToTarget(Transform trackingTarget, Vector3 specificTargetPos, bool isTracking, ActionData actionData)
-    {
-        float maxSpeed = Mathf.Max(0.01f, actionData.speed);
-        float startSpeed = Mathf.Max(0f, actionData.startSpeed);
-        float accel = actionData.useAcceleration ? Mathf.Max(0.01f, actionData.acceleration) : 0f;
-
-        float currentSpeed = actionData.useAcceleration ? startSpeed : maxSpeed;
-        float totalTimer = 0f;
-        float refreshTimer = 0f;
-        int refreshCount = 0;
-
-        bool checkDest = actionData.stopOnDestinationReached;
-        bool checkDetect = actionData.stopOnTargetDetected && isTracking;
-        bool checkTime = actionData.stopOnTimeLimit;
-
-        bool canRefresh = actionData.usePositionRefresh;
+        float currentSpeed = isAccelerated ? startSpeed : maxSpeed;
+        float timer = 0f;
 
         while (true)
         {
-            Vector3 baseTargetPos = specificTargetPos;
-            if (isTracking)
+            if (checkTime)
             {
-                if (trackingTarget == null) yield break; 
-                baseTargetPos = trackingTarget.position;
+                timer += Time.fixedDeltaTime; 
+                if (timer >= timeLimit) yield break;
             }
 
-            if (actionData.trackXOnly && !actionData.trackZOnly) baseTargetPos.z = rb.position.z;
-            else if (!actionData.trackXOnly && actionData.trackZOnly) baseTargetPos.x = rb.position.x;
+            if (checkTarget && CheckTargetReached(targetPos, distanceMode, targetShape, stopDist, shapeOffset, attackBoxSize)) 
+                yield break;
 
-            baseTargetPos.y = 0f;
-
-            Vector3 offsetTargetPos = GetOffsetPosition(rb.position, baseTargetPos, actionData.targetOffset);
-
-            bool needsRefresh = false;
-            while (!needsRefresh)
+            Vector3 destination = targetPos;
+            if (distanceMode == DistanceCheckMode.SelfOrigin)
             {
-                if (checkTime)
-                {
-                    totalTimer += Time.fixedDeltaTime;
-                    if (totalTimer >= actionData.timeLimit) yield break;
-                }
-
-                // 종료 조건 1: 목표 좌표 도달 검사 (절대 좌표 기준)
-                if (checkDest && CheckDestinationReached(offsetTargetPos, actionData.destinationStopDistance))
-                    yield break;
-
-                // 종료 조건 2: 이동 중 타겟 감지 검사 (추적 모드에서만)
-                if (checkDetect && trackingTarget != null && CheckTargetInDetectRange(trackingTarget.position, actionData))
-                    yield break;
-
-                Vector3 destination = offsetTargetPos;
-
-                Vector3 dirToDest = destination - rb.position;
-                dirToDest.y = 0f; 
-                float distToDest = dirToDest.magnitude;
-
-                Vector3 moveDir = Get8Direction(dirToDest);
-                UpdateFacingDirection(moveDir.x);
-
-                if (actionData.useAcceleration)
-                {
-                    currentSpeed = Mathf.MoveTowards(currentSpeed, maxSpeed, accel * Time.fixedDeltaTime);
-                }
-
-                float moveStep = currentSpeed * Time.fixedDeltaTime;
-                Vector3 nextPos;
-
-                if (distToDest <= moveStep)
-                {
-                    nextPos = rb.position + dirToDest;
-                }
-                else
-                {
-                    nextPos = rb.position + (moveDir * moveStep);
-                }
-
-                rb.MovePosition(nextPos);
-                
-                yield return new WaitForFixedUpdate();
-
-                if (canRefresh)
-                {
-                    refreshTimer += Time.fixedDeltaTime;
-                    if (refreshTimer >= actionData.positionRefreshInterval)
-                    {
-                        refreshTimer = 0f;
-                        refreshCount++;
-                        if (!actionData.repeatRefreshUntilReached && refreshCount >= actionData.refreshRepeatCount)
-                        {
-                            canRefresh = false; 
-                        }
-                        needsRefresh = true; 
-                    }
-                }
-                else if (isTracking && !actionData.usePositionRefresh)
-                {
-                    // 동적 새로고침 미사용 시에만 매 프레임 추적 갱신
-                    // 동적 새로고침 사용 시 횟수 소진 후에는 마지막 좌표에 고정
-                    needsRefresh = true;
-                }
+                Vector3 worldOffset = transform.TransformPoint(shapeOffset) - transform.position;
+                destination = targetPos - worldOffset;
             }
+
+            Vector3 dirToDest = destination - rb.position;
+            float distToDest = dirToDest.magnitude;
+            
+            Vector3 moveDir = Get8Direction(dirToDest);
+            UpdateFacingDirection(moveDir.x);
+
+            if (isAccelerated)
+            {
+                currentSpeed = Mathf.MoveTowards(currentSpeed, maxSpeed, accel * Time.fixedDeltaTime);
+            }
+
+            float moveStep = currentSpeed * Time.fixedDeltaTime;
+            Vector3 nextPos;
+
+            if (distToDest <= moveStep)
+            {
+                nextPos = destination;
+            }
+            else
+            {
+                nextPos = rb.position + (moveDir * moveStep);
+            }
+            
+            rb.MovePosition(nextPos);
+            
+            yield return new WaitForFixedUpdate();
         }
     }
 
-    /// <summary>
-    /// 종료 조건 1: 절대 좌표 기준으로 목표 좌표에 도달했는지 검사
-    /// </summary>
-    private bool CheckDestinationReached(Vector3 targetPos, float stopDistance)
+    public IEnumerator TrackObject(Transform target, bool trackXOnly, bool trackZOnly, float startSpeed, float maxSpeed, bool isAccelerated, float accel, bool checkTarget, float stopDist, bool checkTime, float timeLimit, DistanceCheckMode distanceMode, TargetShape targetShape, Vector3 shapeOffset, Vector3 attackBoxSize)
+    {
+        maxSpeed = Mathf.Max(0.01f, maxSpeed);
+        startSpeed = Mathf.Max(0f, startSpeed);
+        if (isAccelerated) accel = Mathf.Max(0.01f, accel);
+
+        float currentSpeed = isAccelerated ? startSpeed : maxSpeed;
+        float timer = 0f;
+
+        while (target != null)
+        {
+            if (checkTime)
+            {
+                timer += Time.fixedDeltaTime;
+                if (timer >= timeLimit) yield break;
+            }
+
+            Vector3 targetPos = target.position;
+
+            if (trackXOnly && !trackZOnly)
+                targetPos.z = rb.position.z; 
+            else if (!trackXOnly && trackZOnly)
+                targetPos.x = rb.position.x; 
+
+            Vector3 baseTargetPos = targetPos;
+
+            if (checkTarget && CheckTargetReached(baseTargetPos, distanceMode, targetShape, stopDist, shapeOffset, attackBoxSize)) 
+                yield break;
+
+            Vector3 destination = baseTargetPos;
+            if (distanceMode == DistanceCheckMode.SelfOrigin)
+            {
+                Vector3 worldOffset = transform.TransformPoint(shapeOffset) - transform.position;
+                destination = baseTargetPos - worldOffset;
+            }
+
+            if (trackXOnly && !trackZOnly)
+                destination.z = rb.position.z;
+            else if (!trackXOnly && trackZOnly)
+                destination.x = rb.position.x;
+
+            Vector3 dirToDest = destination - rb.position;
+            float distToDest = dirToDest.magnitude;
+
+            Vector3 moveDir = Get8Direction(dirToDest);
+            UpdateFacingDirection(moveDir.x);
+
+            if (isAccelerated)
+            {
+                currentSpeed = Mathf.MoveTowards(currentSpeed, maxSpeed, accel * Time.fixedDeltaTime);
+            }
+
+            float moveStep = currentSpeed * Time.fixedDeltaTime;
+            Vector3 nextPos;
+
+            if (distToDest <= moveStep)
+            {
+                nextPos = destination;
+            }
+            else
+            {
+                nextPos = rb.position + (moveDir * moveStep);
+            }
+
+            rb.MovePosition(nextPos);
+            
+            yield return new WaitForFixedUpdate();
+        }
+    }
+
+    private bool CheckTargetReached(Vector3 targetPos, DistanceCheckMode mode, TargetShape shape, float floatDist, Vector3 shapeOffset, Vector3 attackBoxSize)
     {
         Vector3 currentPos = rb.position;
-        targetPos.y = currentPos.y;
-        float allowedDist = Mathf.Max(stopDistance, 0.01f);
-        return Vector3.Distance(currentPos, targetPos) <= allowedDist;
-    }
 
-    /// <summary>
-    /// 종료 조건 2: 추적 타겟이 감지 범위 안에 있는지 검사
-    /// </summary>
-    private bool CheckTargetInDetectRange(Vector3 targetObjPos, ActionData actionData)
-    {
-        targetObjPos.y = rb.position.y;
-
-        if (actionData.detectOrigin == DetectOrigin.Self)
+        if (mode == DistanceCheckMode.TrackingObjectOrigin)
         {
-            // 자신 기준: 자신의 로컬 좌표계에서 감지 오프셋 위치를 중심으로 타겟이 범위 안에 있는지
-            Vector3 detectCenter = transform.TransformPoint(actionData.detectOffset);
-            if (actionData.detectShape == DetectShape.Sphere)
+            // ▼ 버그 수정: TrackingObjectOrigin에서는 shapeOffset(도형 오프셋)을 완전히 무시하도록 수정했습니다.
+            Vector3 center = targetPos; 
+            
+            if (shape == TargetShape.Point)
             {
-                return Vector3.Distance(detectCenter, targetObjPos) <= actionData.detectRadius;
+                return Vector3.Distance(currentPos, center) <= floatDist;
             }
-            else // Box
+            else if (shape == TargetShape.Sphere)
             {
-                Vector3 localTarget = transform.InverseTransformPoint(targetObjPos) - actionData.detectOffset;
-                localTarget.y = 0f;
-                bool inX = Mathf.Abs(localTarget.x) <= actionData.detectBoxSize.x * 0.5f;
-                bool inY = true;
-                bool inZ = Mathf.Abs(localTarget.z) <= actionData.detectBoxSize.z * 0.5f;
+                Vector3 closestPoint = col.ClosestPoint(center);
+                return Vector3.Distance(closestPoint, center) <= floatDist;
+            }
+            else 
+            {
+                float diffX = Mathf.Abs(center.x - currentPos.x);
+                float diffY = Mathf.Abs(center.y - currentPos.y);
+                float diffZ = Mathf.Abs(center.z - currentPos.z);
+                return diffX <= attackBoxSize.x * 0.5f && diffY <= attackBoxSize.y * 0.5f && diffZ <= attackBoxSize.z * 0.5f;
+            }
+        }
+        else if (mode == DistanceCheckMode.SelfOrigin)
+        {
+            Vector3 localTargetPos = transform.InverseTransformPoint(targetPos) - shapeOffset;
+            
+            if (shape == TargetShape.Point)
+            {
+                return localTargetPos.magnitude <= floatDist;
+            }
+            else if (shape == TargetShape.Sphere)
+            {
+                return localTargetPos.magnitude <= floatDist;
+            }
+            else 
+            {
+                bool inX = (Mathf.Abs(localTargetPos.x) <= attackBoxSize.x * 0.5f);
+                bool inY = (Mathf.Abs(localTargetPos.y) <= attackBoxSize.y * 0.5f);
+                bool inZ = (Mathf.Abs(localTargetPos.z) <= attackBoxSize.z * 0.5f);
                 return inX && inY && inZ;
             }
         }
-        else // DetectOrigin.Target
-        {
-            // 타겟 기준: 타겟 위치 + 오프셋을 중심으로 자신이 범위 안에 있는지
-            Vector3 detectCenter = targetObjPos + actionData.detectOffset;
-            if (actionData.detectShape == DetectShape.Sphere)
-            {
-                Vector3 closestPoint = col.ClosestPoint(detectCenter);
-                closestPoint.y = rb.position.y;
-                return Vector3.Distance(closestPoint, detectCenter) <= actionData.detectRadius;
-            }
-            else // Box
-            {
-                Vector3 diff = rb.position - detectCenter;
-                diff.y = 0f;
-                bool inX = Mathf.Abs(diff.x) <= actionData.detectBoxSize.x * 0.5f;
-                bool inY = true;
-                bool inZ = Mathf.Abs(diff.z) <= actionData.detectBoxSize.z * 0.5f;
-                return inX && inY && inZ;
-            }
-        }
+        
+        return false;
     }
 
-    public void TeleportToTarget(Transform trackingTarget, Vector3 specificTargetPos, bool isTracking, ActionData actionData)
+    public void TeleportToPosition(Vector3 targetPos)
     {
-        Vector3 baseTargetPos = specificTargetPos;
-        if (isTracking)
-        {
-            if (trackingTarget == null) return;
-            baseTargetPos = trackingTarget.position;
-        }
-
-        if (actionData.trackXOnly && !actionData.trackZOnly) baseTargetPos.z = rb.position.z;
-        else if (!actionData.trackXOnly && actionData.trackZOnly) baseTargetPos.x = rb.position.x;
-
-        baseTargetPos.y = 0f;
-
-        Vector3 offsetTargetPos = GetOffsetPosition(rb.position, baseTargetPos, actionData.targetOffset);
-
-        UpdateFacingDirection((offsetTargetPos - rb.position).x);
+        UpdateFacingDirection((targetPos - rb.position).x);
 
         rb.linearVelocity = Vector3.zero; 
-        rb.position = offsetTargetPos;
+        rb.position = targetPos; 
+    }
+
+    public void TeleportToObject(Transform target, bool trackXOnly, bool trackZOnly)
+    {
+        if (target != null)
+        {
+            Vector3 targetPos = target.position;
+
+            if (trackXOnly && !trackZOnly)
+                targetPos.z = rb.position.z; 
+            else if (!trackXOnly && trackZOnly)
+                targetPos.x = rb.position.x; 
+
+            Vector3 destination = targetPos;
+
+            UpdateFacingDirection((destination - rb.position).x);
+
+            rb.linearVelocity = Vector3.zero;
+            rb.position = destination;
+        }
     }
 
     private void OnDrawGizmos()
@@ -398,7 +404,13 @@ public class CapsuleController : MonoBehaviour
                 }
                 else if (action.targetType == TargetType.SpecificPosition)
                 {
+                    // ▼ 실행 시점 캡처 기능 시 에디터 기즈모 처리
                     Vector3 tPos = action.targetPosition;
+                    if (action.capturePositionAtExecution && !string.IsNullOrEmpty(action.capturePositionTag))
+                    {
+                        GameObject tGO = GameObject.FindWithTag(action.capturePositionTag);
+                        if (tGO != null) tPos = tGO.transform.position;
+                    }
                     targetDir = (tPos - spawnPos).normalized;
                 }
                 
@@ -429,6 +441,12 @@ public class CapsuleController : MonoBehaviour
                     else if (action.targetType == TargetType.SpecificPosition)
                     {
                         basePos = action.targetPosition;
+                        // ▼ 에디터 기즈모에서도 실행 시점 캡처 타겟의 현재 위치를 보여주도록 반영
+                        if (action.capturePositionAtExecution && !string.IsNullOrEmpty(action.capturePositionTag))
+                        {
+                            GameObject tGO = GameObject.FindWithTag(action.capturePositionTag);
+                            if (tGO != null) basePos = tGO.transform.position;
+                        }
                     }
 
                     Vector3 attackCenter = basePos + action.attackOffset;
@@ -501,101 +519,116 @@ public class CapsuleController : MonoBehaviour
             }
 
             Vector3 finalTargetPos = action.targetPosition;
-            bool isTracking = action.targetType == TargetType.TrackObject || action.targetType == TargetType.TrackObjectXOnly || action.targetType == TargetType.TrackObjectZOnly;
-            Vector3 rawTargetPos = finalTargetPos; // 추적 원본 좌표 (오프셋 미적용)
 
-            if (isTracking)
+            if (action.targetType == TargetType.TrackObject || action.targetType == TargetType.TrackObjectXOnly || action.targetType == TargetType.TrackObjectZOnly)
             {
                 if (!string.IsNullOrEmpty(action.targetTag))
                 {
                     GameObject targetGO = GameObject.FindWithTag(action.targetTag);
                     if (targetGO != null) 
                     {
-                        finalTargetPos = targetGO.transform.position;
-                        rawTargetPos = finalTargetPos;
+                        Vector3 targetPos = targetGO.transform.position;
+                        bool trackX = action.targetType == TargetType.TrackObjectXOnly;
+                        bool trackZ = action.targetType == TargetType.TrackObjectZOnly;
+
+                        if (trackX)
+                            targetPos.z = transform.position.z;
+                        else if (trackZ)
+                            targetPos.x = transform.position.x;
+
+                        Gizmos.color = new Color(0.5f, 0.5f, 0.5f, 0.5f);
+                        Gizmos.DrawSphere(targetPos, 0.15f);
+
+                        finalTargetPos = targetPos;
                     }
                 }
             }
-
-
-            if (action.trackXOnly && !action.trackZOnly) finalTargetPos.z = transform.position.z;
-            else if (!action.trackXOnly && action.trackZOnly) finalTargetPos.x = transform.position.x;
-
-            finalTargetPos.y = 0f;
-
-            Vector3 offsetTargetPos = GetOffsetPosition(transform.position, finalTargetPos, action.targetOffset);
-            Vector3 destination = offsetTargetPos;
-
-            // ── 기즈모 1: 추적 원본 좌표 (주황색 점) ──
-            if (isTracking)
+            else
             {
-                Gizmos.color = new Color(1f, 0.6f, 0f, 0.8f); // 주황색
-                Gizmos.DrawSphere(rawTargetPos, 0.12f);
-                // 원본 좌표 → 최종 목적지 점선 연결
-                Gizmos.color = new Color(1f, 0.6f, 0f, 0.3f);
-                DrawDashedLine(rawTargetPos, destination, 0.3f);
-#if UNITY_EDITOR
-                UnityEditor.Handles.Label(rawTargetPos + Vector3.up * 0.3f, "추적 원본");
-#endif
+                // ▼ 동적 좌표 캡처 시 에디터에 목적지 기즈모를 제대로 보여주기 위한 로직
+                if (action.targetType == TargetType.SpecificPosition && action.capturePositionAtExecution && !string.IsNullOrEmpty(action.capturePositionTag))
+                {
+                    GameObject tGO = GameObject.FindWithTag(action.capturePositionTag);
+                    if (tGO != null) finalTargetPos = tGO.transform.position;
+                }
             }
 
-            // ── 기즈모 2: 최종 목적지 (노랑/시안 점) ──
+            Vector3 destination = finalTargetPos;
+            if (action.distanceMode == DistanceCheckMode.SelfOrigin)
+            {
+                Vector3 worldOffset = transform.TransformPoint(action.shapeOffset) - transform.position;
+                destination = finalTargetPos - worldOffset;
+            }
+
+            if (action.targetType == TargetType.TrackObject || action.targetType == TargetType.TrackObjectXOnly || action.targetType == TargetType.TrackObjectZOnly)
+            {
+                bool trackX = action.targetType == TargetType.TrackObjectXOnly;
+                bool trackZ = action.targetType == TargetType.TrackObjectZOnly;
+                
+                if (trackX)
+                    destination.z = transform.position.z;
+                else if (trackZ)
+                    destination.x = transform.position.x;
+            }
+
             Gizmos.color = (action.actionType == ActionType.Move && action.isTeleport) ? Color.cyan : Color.yellow;
             Gizmos.DrawSphere(destination, 0.1f);
+
             Gizmos.color = new Color(Gizmos.color.r, Gizmos.color.g, Gizmos.color.b, 0.3f);
             Gizmos.DrawLine(transform.position, destination);
 
-            // ── 기즈모 3: 목표 좌표 도달 범위 (초록색 원) ──
-            if (action.actionType == ActionType.Move && action.stopOnDestinationReached)
+            if (action.actionType == ActionType.Move && action.stopOnTargetReached)
             {
                 Gizmos.color = Color.green;
-                float drawDist = Mathf.Max(action.destinationStopDistance, 0.01f);
-                Gizmos.DrawWireSphere(destination, drawDist);
-            }
 
-            // ── 기즈모 4: 타겟 감지 범위 (자홍색) ──
-            if (action.actionType == ActionType.Move && action.stopOnTargetDetected && isTracking)
-            {
-                Gizmos.color = new Color(1f, 0f, 1f, 0.4f); // 자홍색 반투명
-                
-                if (action.detectOrigin == DetectOrigin.Self)
+                if (action.distanceMode == DistanceCheckMode.TrackingObjectOrigin)
                 {
-                    Vector3 detectCenter = transform.TransformPoint(action.detectOffset);
-                    if (action.detectShape == DetectShape.Sphere)
+                    // ▼ 버그 수정: TrackingObjectOrigin일 때는 에디터 기즈모에서도 shapeOffset을 제거합니다.
+                    Vector3 center = finalTargetPos; 
+                    
+                    if (action.targetShape == TargetShape.Point)
                     {
-                        Gizmos.DrawWireSphere(detectCenter, action.detectRadius);
+                        Gizmos.DrawWireSphere(center, action.stopDistance);
+                    }
+                    else if (action.targetShape == TargetShape.Sphere)
+                    {
+                        Gizmos.DrawWireSphere(center, action.stopDistance);
                     }
                     else
                     {
-                        Matrix4x4 rotMat = Matrix4x4.TRS(transform.position, transform.rotation, Vector3.one);
-                        Gizmos.matrix = rotMat;
-                        Gizmos.DrawWireCube(action.detectOffset, action.detectBoxSize);
-                        Gizmos.color = new Color(1f, 0f, 1f, 0.1f);
-                        Gizmos.DrawCube(action.detectOffset, action.detectBoxSize);
-                        Gizmos.matrix = Matrix4x4.identity;
+                        Gizmos.DrawWireCube(center, action.attackBoxSize);
+                        Gizmos.color = new Color(0f, 1f, 0f, 0.1f);
+                        Gizmos.DrawCube(center, action.attackBoxSize);
                     }
                 }
-                else // DetectOrigin.Target
+                else if (action.distanceMode == DistanceCheckMode.SelfOrigin)
                 {
-                    Vector3 detectCenter = rawTargetPos + action.detectOffset;
-                    if (action.detectShape == DetectShape.Sphere)
+                    Matrix4x4 rotationMatrix = Matrix4x4.TRS(transform.position, transform.rotation, transform.localScale);
+                    Gizmos.matrix = rotationMatrix;
+
+                    Vector3 center = action.shapeOffset;
+
+                    if (action.targetShape == TargetShape.Point)
                     {
-                        Gizmos.DrawWireSphere(detectCenter, action.detectRadius);
+                        Gizmos.DrawWireSphere(center, action.stopDistance);
+                    }
+                    else if (action.targetShape == TargetShape.Sphere)
+                    {
+                        Gizmos.DrawWireSphere(center, action.stopDistance);
                     }
                     else
                     {
-                        Gizmos.DrawWireCube(detectCenter, action.detectBoxSize);
-                        Gizmos.color = new Color(1f, 0f, 1f, 0.1f);
-                        Gizmos.DrawCube(detectCenter, action.detectBoxSize);
+                        Gizmos.DrawWireCube(center, action.attackBoxSize);
+                        Gizmos.color = new Color(0f, 1f, 0f, 0.1f);
+                        Gizmos.DrawCube(center, action.attackBoxSize);
                     }
+                    
+                    Gizmos.matrix = Matrix4x4.identity;
                 }
             }
 
 #if UNITY_EDITOR
-            string labelText = $"목표: {action.actionType}";
-            if (action.stopOnDestinationReached) labelText += "\n[좌표 도달 종료]";
-            if (action.stopOnTargetDetected && isTracking) labelText += "\n[타겟 감지 종료]";
-            UnityEditor.Handles.Label(destination + Vector3.up * 0.5f, labelText);
+            UnityEditor.Handles.Label(destination + Vector3.up * 0.5f, $"목표: {action.actionType}\n(모드: {action.distanceMode})");
 #endif
         }
     }
@@ -618,8 +651,13 @@ public class CapsuleController : MonoBehaviour
             else if (action.targetType == TargetType.SpecificPosition)
             {
                 Vector3 targetP = action.targetPosition;
-                Vector3 offsetP = GetOffsetPosition(startPos, targetP, action.targetOffset);
-                dir = offsetP - startPos;
+                // ▼ 동적 캡처 적용
+                if (action.capturePositionAtExecution && !string.IsNullOrEmpty(action.capturePositionTag))
+                {
+                    GameObject tGO = GameObject.FindWithTag(action.capturePositionTag);
+                    if (tGO != null) targetP = tGO.transform.position;
+                }
+                dir = targetP - startPos;
             }
             else 
             {
@@ -628,14 +666,7 @@ public class CapsuleController : MonoBehaviour
                     GameObject targetGO = GameObject.FindWithTag(action.targetTag);
                     if (targetGO != null)
                     {
-                        Vector3 targetP = targetGO.transform.position;
-                        if (action.trackXOnly && !action.trackZOnly) targetP.z = startPos.z;
-                        else if (!action.trackXOnly && action.trackZOnly) targetP.x = startPos.x;
-                        
-                        targetP.y = 0f;
-                        
-                        Vector3 offsetP = GetOffsetPosition(startPos, targetP, action.targetOffset);
-                        dir = offsetP - startPos;
+                        dir = targetGO.transform.position - startPos;
                     }
                 }
             }
@@ -666,23 +697,6 @@ public class CapsuleController : MonoBehaviour
         
         Gizmos.DrawRay(pos + direction, right * arrowHeadLength);
         Gizmos.DrawRay(pos + direction, left * arrowHeadLength);
-    }
-
-    private void DrawDashedLine(Vector3 from, Vector3 to, float dashLength)
-    {
-        Vector3 direction = to - from;
-        float totalLength = direction.magnitude;
-        if (totalLength < 0.001f) return;
-        Vector3 dir = direction / totalLength;
-        float drawn = 0f;
-        bool draw = true;
-        while (drawn < totalLength)
-        {
-            float segLen = Mathf.Min(dashLength, totalLength - drawn);
-            if (draw) Gizmos.DrawLine(from + dir * drawn, from + dir * (drawn + segLen));
-            drawn += segLen;
-            draw = !draw;
-        }
     }
 
     private void DrawWireCylinder(Vector3 center, float radius, float height)

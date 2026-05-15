@@ -5,8 +5,8 @@ public enum ActionType { Move, Wait, VariableAttack, FixedAttack, RangedAttack }
 public enum TargetType { SpecificPosition, TrackObject, Direction, TrackObjectXOnly, TrackObjectZOnly }
 public enum MoveDirection8 { None, Up, Down, Left, Right, UpLeft, UpRight, DownLeft, DownRight }
 
-public enum DetectOrigin { Self, Target }
-public enum DetectShape { Sphere, Box }
+public enum DistanceCheckMode { SelfOrigin, TrackingObjectOrigin }
+public enum TargetShape { Sphere, Box, Point }
 public enum AttackShape { Sphere, Box, Cylinder } 
 
 [System.Serializable]
@@ -22,6 +22,10 @@ public class ActionData
     public TargetType targetType;
     public Vector3 targetPosition;
     
+    // ▼ [신규 기능] 실행 시점 타겟 좌표 캡처
+    public bool capturePositionAtExecution; 
+    public string capturePositionTag;       
+
     public string targetTag; 
     
     public bool isTeleport;
@@ -32,35 +36,20 @@ public class ActionData
 
     public bool trackXOnly;
     public bool trackZOnly;
-    
-    
-    // ▼ 목표 오프셋 (도착 지점을 정하는 유일한 오프셋)
-    public Vector3 targetOffset = Vector3.zero;
-    
-    // ▼ 동적 새로고침
-    public bool usePositionRefresh;
-    public float positionRefreshInterval = 0.5f;
-    public bool repeatRefreshUntilReached = true;
-    public int refreshRepeatCount = 3;
 
     public float startSpeed = 0f;
     public float speed = 5f;
     public bool useAcceleration; 
     public float acceleration = 2f;
 
-    // ▼ 종료 조건 1: 목표 좌표 도달 시 종료 (절대 좌표 기준)
-    public bool stopOnDestinationReached;
-    public float destinationStopDistance = 0.1f;
+    public bool stopOnTargetReached;
     
-    // ▼ 종료 조건 2: 이동 중 타겟 감지 시 종료 (오브젝트 추적 모드에서만 유효)
-    public bool stopOnTargetDetected;
-    public DetectOrigin detectOrigin = DetectOrigin.Self;
-    public DetectShape detectShape = DetectShape.Sphere;
-    public Vector3 detectOffset = Vector3.zero;
-    public float detectRadius = 1.5f;
-    public Vector3 detectBoxSize = new Vector3(2f, 2f, 2f);
+    public DistanceCheckMode distanceMode = DistanceCheckMode.SelfOrigin; 
+    public TargetShape targetShape = TargetShape.Sphere;
+    public Vector3 shapeOffset = Vector3.zero;
+    public Vector3 attackBoxSize = new Vector3(1f, 1f, 1f);
+    public float stopDistance = 0.1f; 
 
-    // ▼ 종료 조건 3: 시간 제한
     public bool stopOnTimeLimit;
     public float timeLimit = 3f; 
 
@@ -201,25 +190,19 @@ public class ActionDataDrawer : UnityEditor.PropertyDrawer
                     UnityEditor.SerializedProperty posProp = property.FindPropertyRelative("targetPosition");
                     Vector3 pos = posProp.vector3Value;
                     
-                    float lineH = UnityEditor.EditorGUIUtility.singleLineHeight;
-                    float labelW = UnityEditor.EditorGUIUtility.labelWidth;
-                    float fieldW = (rect.width - labelW - 4f) * 0.5f;
+                    float vHeight = UnityEditor.EditorGUIUtility.singleLineHeight;
+                    if (UnityEditor.EditorGUIUtility.wideMode == false) vHeight *= 2; 
                     
-                    Rect labelRect = new Rect(rect.x, rect.y, labelW, lineH);
-                    UnityEditor.EditorGUI.LabelField(labelRect, "지정 좌표 (X, Z)");
+                    Rect vRect = new Rect(rect.x, rect.y, rect.width, vHeight);
+                    Vector2 posXZ = new Vector2(pos.x, pos.z);
+                    posXZ = UnityEditor.EditorGUI.Vector2Field(vRect, "지정 좌표 (X, Z)", posXZ);
+                    posProp.vector3Value = new Vector3(posXZ.x, pos.y, posXZ.y);
                     
-                    Rect xLabelRect = new Rect(rect.x + labelW, rect.y, 14f, lineH);
-                    UnityEditor.EditorGUI.LabelField(xLabelRect, "X");
-                    Rect xRect = new Rect(rect.x + labelW + 14f, rect.y, fieldW - 16f, lineH);
-                    float newX = UnityEditor.EditorGUI.FloatField(xRect, pos.x);
-                    
-                    Rect zLabelRect = new Rect(rect.x + labelW + fieldW + 2f, rect.y, 14f, lineH);
-                    UnityEditor.EditorGUI.LabelField(zLabelRect, "Z");
-                    Rect zRect = new Rect(rect.x + labelW + fieldW + 16f, rect.y, fieldW - 16f, lineH);
-                    float newZ = UnityEditor.EditorGUI.FloatField(zRect, pos.z);
-                    
-                    posProp.vector3Value = new Vector3(newX, pos.y, newZ);
-                    rect.y += lineH + 2;
+                    rect.y += vHeight + 2;
+
+                    DrawProperty(ref rect, property, "capturePositionAtExecution", "실행 시 타겟 좌표 캡처");
+                    if (property.FindPropertyRelative("capturePositionAtExecution").boolValue)
+                        DrawProperty(ref rect, property, "capturePositionTag", " ㄴ 캡처할 타겟 태그");
                 }
                 else if (targetType == TargetType.Direction)
                 {
@@ -232,67 +215,34 @@ public class ActionDataDrawer : UnityEditor.PropertyDrawer
                     DrawProperty(ref rect, property, "trackZOnly", "Z축만 추적");
                 }
 
-                if (targetType != TargetType.Direction)
-                {
-                    DrawHeader(ref rect, "▶ 타겟팅 부가 설정");
-                    DrawProperty(ref rect, property, "targetOffset", "목표 오프셋 (X, Z 적용)");
-                    
-                    if (!property.FindPropertyRelative("isTeleport").boolValue)
-                    {
-                        DrawProperty(ref rect, property, "usePositionRefresh", "동적 새로고침 사용");
-                        if (property.FindPropertyRelative("usePositionRefresh").boolValue)
-                        {
-                            DrawProperty(ref rect, property, "positionRefreshInterval", " ㄴ 새로고침 간격(초)");
-                            DrawProperty(ref rect, property, "repeatRefreshUntilReached", " ㄴ 도착 시까지 반복");
-                            if (!property.FindPropertyRelative("repeatRefreshUntilReached").boolValue)
-                            {
-                                DrawProperty(ref rect, property, "refreshRepeatCount", " ㄴ 반복 횟수");
-                            }
-                        }
-                    }
-                }
-
                 DrawHeader(ref rect, "▶ 종료 조건 설정");
 
-                // 종료 조건 1: 목표 좌표 도달 시 종료
-                DrawProperty(ref rect, property, "stopOnDestinationReached", "목표 좌표 도달 시 종료");
-                if (property.FindPropertyRelative("stopOnDestinationReached").boolValue)
+                DrawProperty(ref rect, property, "stopOnTargetReached", "목표 도달 시 종료");
+                if (property.FindPropertyRelative("stopOnTargetReached").boolValue)
                 {
-                    DrawProperty(ref rect, property, "destinationStopDistance", " ㄴ 정지 허용 오차");
-                }
+                    UnityEditor.SerializedProperty distModeProp = property.FindPropertyRelative("distanceMode");
+                    string[] distModeNames = { "자신 오브젝트 기준", "추적 오브젝트 기준" };
+                    DrawPopup(ref rect, distModeProp, " ㄴ 거리 측정 방식", distModeNames);
 
-                bool isTrackingMode = (targetType == TargetType.TrackObject || 
-                                       targetType == TargetType.TrackObjectXOnly || 
-                                       targetType == TargetType.TrackObjectZOnly);
+                    UnityEditor.SerializedProperty targetShapeProp = property.FindPropertyRelative("targetShape");
+                    string[] targetShapeNames = { "원형 (Sphere)", "사각형 (Box)", "점 (Point)" };
+                    DrawPopup(ref rect, targetShapeProp, " ㄴ 감지 도형", targetShapeNames);
 
-                // 종료 조건 2: 타겟 감지 시 종료 (오브젝트 추적 모드에서만 표시)
-                if (isTrackingMode)
-                {
-                    DrawProperty(ref rect, property, "stopOnTargetDetected", "이동 중 타겟 감지 시 종료");
-                    if (property.FindPropertyRelative("stopOnTargetDetected").boolValue)
+                    bool capPos = property.FindPropertyRelative("capturePositionAtExecution").boolValue;
+                    bool shouldDisableOffset = (targetType == TargetType.SpecificPosition && capPos);
+                    
+                    UnityEditor.EditorGUI.BeginDisabledGroup(shouldDisableOffset);
+                    DrawProperty(ref rect, property, "shapeOffset", " ㄴ 도형 오프셋");
+                    UnityEditor.EditorGUI.EndDisabledGroup();
+
+                    DrawProperty(ref rect, property, "stopDistance", " ㄴ 정지 거리 (반지름/오차)");
+                    
+                    if (targetShapeProp.enumValueIndex == (int)TargetShape.Box)
                     {
-                        UnityEditor.SerializedProperty detectOriginProp = property.FindPropertyRelative("detectOrigin");
-                        string[] detectOriginNames = { "자신 오브젝트 기준", "타겟 오브젝트 기준" };
-                        DrawPopup(ref rect, detectOriginProp, " ㄴ 감지 기준", detectOriginNames);
-
-                        UnityEditor.SerializedProperty detectShapeProp = property.FindPropertyRelative("detectShape");
-                        string[] detectShapeNames = { "원형 (Sphere)", "사각형 (Box)" };
-                        DrawPopup(ref rect, detectShapeProp, " ㄴ 감지 도형", detectShapeNames);
-
-                        DrawProperty(ref rect, property, "detectOffset", " ㄴ 감지 도형 오프셋");
-
-                        if (detectShapeProp.enumValueIndex == (int)DetectShape.Sphere)
-                        {
-                            DrawProperty(ref rect, property, "detectRadius", " ㄴ 감지 반지름");
-                        }
-                        else
-                        {
-                            DrawProperty(ref rect, property, "detectBoxSize", " ㄴ 감지 박스 크기");
-                        }
+                        DrawProperty(ref rect, property, "attackBoxSize", " ㄴ 감지 박스 크기");
                     }
                 }
 
-                // 종료 조건 3: 시간 제한
                 DrawProperty(ref rect, property, "stopOnTimeLimit", "시간 제한으로 종료");
                 if (property.FindPropertyRelative("stopOnTimeLimit").boolValue)
                     DrawProperty(ref rect, property, "timeLimit", " ㄴ 제한 시간(초)");
@@ -318,7 +268,6 @@ public class ActionDataDrawer : UnityEditor.PropertyDrawer
                 {
                     DrawProperty(ref rect, property, "targetTag", "타겟 태그");
                 }
-                
 
                 DrawProperty(ref rect, property, "damage", "데미지");
                 DrawProperty(ref rect, property, "knockbackForce", "넉백 힘 (X, Y, Z)");
@@ -405,6 +354,7 @@ public class ActionDataDrawer : UnityEditor.PropertyDrawer
         float height = UnityEditor.EditorGUIUtility.singleLineHeight + 2;
 
         bool playAnim = property.FindPropertyRelative("playAnimation").boolValue;
+        bool capPos = property.FindPropertyRelative("capturePositionAtExecution").boolValue;
         
         ActionType actionType = (ActionType)property.FindPropertyRelative("actionType").enumValueIndex;
 
@@ -439,58 +389,26 @@ public class ActionDataDrawer : UnityEditor.PropertyDrawer
             if (targetType == TargetType.SpecificPosition)
             {
                 float vHeight = UnityEditor.EditorGUIUtility.singleLineHeight;
+                if (UnityEditor.EditorGUIUtility.wideMode == false) vHeight *= 2; 
                 height += vHeight + 2;
+
+                height += AddProp(property, "capturePositionAtExecution");
+                if (capPos) height += AddProp(property, "capturePositionTag");
             }
             else if (targetType == TargetType.Direction) height += AddProp(property, "moveDirection8");
             else height += AddPropsCount(property, "targetTag", "trackXOnly", "trackZOnly");
 
-            if (targetType != TargetType.Direction)
-            {
-                height += headerHeight;
-                height += AddProp(property, "targetOffset");
-                if (!property.FindPropertyRelative("isTeleport").boolValue)
-                {
-                    height += AddProp(property, "usePositionRefresh");
-                    if (property.FindPropertyRelative("usePositionRefresh").boolValue)
-                    {
-                        height += AddPropsCount(property, "positionRefreshInterval", "repeatRefreshUntilReached");
-                        if (!property.FindPropertyRelative("repeatRefreshUntilReached").boolValue)
-                            height += AddProp(property, "refreshRepeatCount");
-                    }
-                }
-            }
-
-            // ▶ 종료 조건 설정
             height += headerHeight;
             
-            // 종료 조건 1: 목표 좌표 도달
-            height += AddProp(property, "stopOnDestinationReached");
-            if (property.FindPropertyRelative("stopOnDestinationReached").boolValue)
+            height += AddProp(property, "stopOnTargetReached");
+            if (property.FindPropertyRelative("stopOnTargetReached").boolValue)
             {
-                height += AddProp(property, "destinationStopDistance");
+                height += (UnityEditor.EditorGUIUtility.singleLineHeight + 2) * 2; // For popups
+                height += AddPropsCount(property, "shapeOffset", "stopDistance");
+                if (property.FindPropertyRelative("targetShape").enumValueIndex == (int)TargetShape.Box)
+                    height += AddProp(property, "attackBoxSize");
             }
 
-            bool isTrackingMode = (targetType == TargetType.TrackObject || 
-                                   targetType == TargetType.TrackObjectXOnly || 
-                                   targetType == TargetType.TrackObjectZOnly);
-
-            // 종료 조건 2: 타겟 감지 (추적 모드에서만)
-            if (isTrackingMode)
-            {
-                height += AddProp(property, "stopOnTargetDetected");
-                if (property.FindPropertyRelative("stopOnTargetDetected").boolValue)
-                {
-                    height += (UnityEditor.EditorGUIUtility.singleLineHeight + 2) * 2; // For 2 popups
-                    height += AddProp(property, "detectOffset");
-
-                    if (property.FindPropertyRelative("detectShape").enumValueIndex == (int)DetectShape.Sphere)
-                        height += AddProp(property, "detectRadius");
-                    else
-                        height += AddProp(property, "detectBoxSize");
-                }
-            }
-
-            // 종료 조건 3: 시간 제한
             height += AddProp(property, "stopOnTimeLimit");
             if (property.FindPropertyRelative("stopOnTimeLimit").boolValue)
                 height += AddProp(property, "timeLimit");
@@ -507,7 +425,6 @@ public class ActionDataDrawer : UnityEditor.PropertyDrawer
             TargetType targetType = (TargetType)property.FindPropertyRelative("targetType").enumValueIndex;
             if (targetType == TargetType.SpecificPosition) height += AddProp(property, "targetPosition");
             else if (targetType != TargetType.Direction) height += AddProp(property, "targetTag");
-
 
             height += AddPropsCount(property, "damage", "knockbackForce", "attackOffset");
             

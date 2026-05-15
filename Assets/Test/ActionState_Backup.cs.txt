@@ -41,7 +41,23 @@ public abstract class ActionState
         return null;
     }
 
-
+    // ▼ 실행 시점에 동적 좌표를 캡처하는 헬퍼 함수
+    protected Vector3 GetCapturedPosition()
+    {
+        Vector3 targetPos = actionData.targetPosition;
+        if (actionData.targetType == TargetType.SpecificPosition && actionData.capturePositionAtExecution)
+        {
+            if (!string.IsNullOrEmpty(actionData.capturePositionTag))
+            {
+                GameObject tGO = GameObject.FindWithTag(actionData.capturePositionTag);
+                if (tGO != null)
+                {
+                    targetPos = tGO.transform.position;
+                }
+            }
+        }
+        return targetPos;
+    }
 }
 
 public class MoveState : ActionState
@@ -54,18 +70,17 @@ public class MoveState : ActionState
         
         if (actionData.isTeleport)
         {
-            if (actionData.targetType == TargetType.Direction)
+            if (actionData.targetType == TargetType.SpecificPosition)
             {
-                // 방향 이동에 대해서는 순간이동(오프셋/새로고침) 기능 적용 대상이 아님
-                // 만약 방향 순간이동이 필요하다면 기존처럼 처리하거나, 현재는 구현 생략
+                Vector3 finalPos = GetCapturedPosition();
+                controller.TeleportToPosition(finalPos);
             }
-            else
+            else 
             {
-                bool isTracking = actionData.targetType != TargetType.SpecificPosition;
-                Transform trackingTarget = isTracking ? GetResolvedTarget() : null;
-                Vector3 specificPos = actionData.targetPosition;
-                
-                controller.TeleportToTarget(trackingTarget, specificPos, isTracking, actionData);
+                Transform resolvedTarget = GetResolvedTarget();
+                bool trackX = actionData.targetType == TargetType.TrackObjectXOnly;
+                bool trackZ = actionData.targetType == TargetType.TrackObjectZOnly;
+                controller.TeleportToObject(resolvedTarget, trackX, trackZ); 
             }
             yield return null;
             yield break;
@@ -76,7 +91,19 @@ public class MoveState : ActionState
             controller.Jump(actionData.jumpForce);
         }
 
-        if (actionData.targetType == TargetType.Direction)
+        if (actionData.targetType == TargetType.SpecificPosition)
+        {
+            Vector3 finalPos = GetCapturedPosition();
+
+            yield return controller.StartCoroutine(controller.MoveToPosition(
+                finalPos,
+                actionData.startSpeed, actionData.speed, actionData.useAcceleration, actionData.acceleration,
+                actionData.stopOnTargetReached, actionData.stopDistance,
+                actionData.stopOnTimeLimit, actionData.timeLimit,
+                actionData.distanceMode, actionData.targetShape, actionData.shapeOffset, actionData.attackBoxSize
+            ));
+        }
+        else if (actionData.targetType == TargetType.Direction)
         {
             Vector3 dir = GetDirectionFromEnum(actionData.moveDirection8);
             yield return controller.StartCoroutine(controller.MoveInDirection(
@@ -87,19 +114,24 @@ public class MoveState : ActionState
         }
         else 
         {
-            bool isTracking = actionData.targetType != TargetType.SpecificPosition;
-            Transform trackingTarget = isTracking ? GetResolvedTarget() : null;
-            Vector3 specificPos = actionData.targetPosition;
-            
-            if (isTracking && trackingTarget == null)
+            Transform resolvedTarget = GetResolvedTarget();
+            if (resolvedTarget != null)
+            {
+                bool trackX = actionData.targetType == TargetType.TrackObjectXOnly;
+                bool trackZ = actionData.targetType == TargetType.TrackObjectZOnly;
+
+                yield return controller.StartCoroutine(controller.TrackObject(
+                    resolvedTarget, trackX, trackZ,
+                    actionData.startSpeed, actionData.speed, actionData.useAcceleration, actionData.acceleration,
+                    actionData.stopOnTargetReached, actionData.stopDistance,
+                    actionData.stopOnTimeLimit, actionData.timeLimit,
+                    actionData.distanceMode, actionData.targetShape, actionData.shapeOffset, actionData.attackBoxSize
+                ));
+            }
+            else
             {
                 Debug.LogWarning($"Target object with tag '{actionData.targetTag}' not found.");
-                yield break;
             }
-
-            yield return controller.StartCoroutine(controller.MoveToTarget(
-                trackingTarget, specificPos, isTracking, actionData
-            ));
         }
     }
 
@@ -152,7 +184,8 @@ public class AttackState : ActionState
                 }
                 else if (actionData.targetType == TargetType.SpecificPosition)
                 {
-                    fixedPos = actionData.targetPosition + actionData.attackOffset;
+                    // ▼ 실행 시점 동적 좌표 반영
+                    fixedPos = GetCapturedPosition() + actionData.attackOffset;
                 }
                 else 
                 {
@@ -201,7 +234,8 @@ public class RangedAttackState : ActionState
             }
             else if (actionData.targetType == TargetType.SpecificPosition)
             {
-                targetPos = actionData.targetPosition;
+                // ▼ 실행 시점 동적 좌표 반영
+                targetPos = GetCapturedPosition();
                 hasTarget = true;
             }
 
