@@ -31,9 +31,7 @@ public abstract class ActionState
 
     protected Transform GetResolvedTarget()
     {
-        if (actionData.targetType == TargetType.TrackObject || 
-            actionData.targetType == TargetType.TrackObjectXOnly || 
-            actionData.targetType == TargetType.TrackObjectZOnly)
+        if (actionData.targetType == TargetType.TrackObject)
         {
             GameObject targetGO = GameObject.FindWithTag(actionData.targetTag);
             if (targetGO != null) return targetGO.transform;

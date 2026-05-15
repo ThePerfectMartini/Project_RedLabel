@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 
 public enum ActionType { Move, Wait, VariableAttack, FixedAttack, RangedAttack }
-public enum TargetType { SpecificPosition, TrackObject, Direction, TrackObjectXOnly, TrackObjectZOnly }
+public enum TargetType { SpecificPosition, TrackObject, Direction }
 public enum MoveDirection8 { None, Up, Down, Left, Right, UpLeft, UpRight, DownLeft, DownRight }
 
 public enum DetectOrigin { Self, Target }
@@ -191,35 +191,14 @@ public class ActionDataDrawer : UnityEditor.PropertyDrawer
 
                 DrawHeader(ref rect, "▶ 목표 기준 설정");
                 UnityEditor.SerializedProperty targetTypeProp = property.FindPropertyRelative("targetType");
-                string[] targetTypeNames = { "지정 좌표", "오브젝트 추적", "특정 방향 고정", "오브젝트 추적 (X축만)", "오브젝트 추적 (Z축만)" };
+                string[] targetTypeNames = { "지정 좌표", "오브젝트 추적", "특정 방향 고정" };
                 DrawPopup(ref rect, targetTypeProp, "목표 기준", targetTypeNames);
 
                 TargetType targetType = (TargetType)targetTypeProp.enumValueIndex;
 
                 if (targetType == TargetType.SpecificPosition)
                 {
-                    UnityEditor.SerializedProperty posProp = property.FindPropertyRelative("targetPosition");
-                    Vector3 pos = posProp.vector3Value;
-                    
-                    float lineH = UnityEditor.EditorGUIUtility.singleLineHeight;
-                    float labelW = UnityEditor.EditorGUIUtility.labelWidth;
-                    float fieldW = (rect.width - labelW - 4f) * 0.5f;
-                    
-                    Rect labelRect = new Rect(rect.x, rect.y, labelW, lineH);
-                    UnityEditor.EditorGUI.LabelField(labelRect, "지정 좌표 (X, Z)");
-                    
-                    Rect xLabelRect = new Rect(rect.x + labelW, rect.y, 14f, lineH);
-                    UnityEditor.EditorGUI.LabelField(xLabelRect, "X");
-                    Rect xRect = new Rect(rect.x + labelW + 14f, rect.y, fieldW - 16f, lineH);
-                    float newX = UnityEditor.EditorGUI.FloatField(xRect, pos.x);
-                    
-                    Rect zLabelRect = new Rect(rect.x + labelW + fieldW + 2f, rect.y, 14f, lineH);
-                    UnityEditor.EditorGUI.LabelField(zLabelRect, "Z");
-                    Rect zRect = new Rect(rect.x + labelW + fieldW + 16f, rect.y, fieldW - 16f, lineH);
-                    float newZ = UnityEditor.EditorGUI.FloatField(zRect, pos.z);
-                    
-                    posProp.vector3Value = new Vector3(newX, pos.y, newZ);
-                    rect.y += lineH + 2;
+                    DrawXZField(ref rect, property, "targetPosition", "지정 좌표");
                 }
                 else if (targetType == TargetType.Direction)
                 {
@@ -235,7 +214,7 @@ public class ActionDataDrawer : UnityEditor.PropertyDrawer
                 if (targetType != TargetType.Direction)
                 {
                     DrawHeader(ref rect, "▶ 타겟팅 부가 설정");
-                    DrawProperty(ref rect, property, "targetOffset", "목표 오프셋 (X, Z 적용)");
+                    DrawXZField(ref rect, property, "targetOffset", "목표 오프셋");
                     
                     if (!property.FindPropertyRelative("isTeleport").boolValue)
                     {
@@ -261,9 +240,7 @@ public class ActionDataDrawer : UnityEditor.PropertyDrawer
                     DrawProperty(ref rect, property, "destinationStopDistance", " ㄴ 정지 허용 오차");
                 }
 
-                bool isTrackingMode = (targetType == TargetType.TrackObject || 
-                                       targetType == TargetType.TrackObjectXOnly || 
-                                       targetType == TargetType.TrackObjectZOnly);
+                bool isTrackingMode = (targetType == TargetType.TrackObject);
 
                 // 종료 조건 2: 타겟 감지 시 종료 (오브젝트 추적 모드에서만 표시)
                 if (isTrackingMode)
@@ -305,20 +282,27 @@ public class ActionDataDrawer : UnityEditor.PropertyDrawer
             else 
             {
                 DrawHeader(ref rect, "▶ 공격 기본 설정");
-                UnityEditor.SerializedProperty targetTypeProp = property.FindPropertyRelative("targetType");
-                string[] targetTypeNames = { "지정 좌표", "오브젝트 추적", "특정 방향 고정", "오브젝트 추적 (X축만)", "오브젝트 추적 (Z축만)" };
-                DrawPopup(ref rect, targetTypeProp, "타겟 기준", targetTypeNames);
-
-                TargetType targetType = (TargetType)targetTypeProp.enumValueIndex;
-                if (targetType == TargetType.SpecificPosition)
-                {
-                    DrawProperty(ref rect, property, "targetPosition", "지정 좌표");
-                }
-                else if (targetType != TargetType.Direction)
-                {
-                    DrawProperty(ref rect, property, "targetTag", "타겟 태그");
-                }
                 
+                if (actionType == ActionType.RangedAttack)
+                {
+                    UnityEditor.SerializedProperty targetTypeProp = property.FindPropertyRelative("targetType");
+                    string[] targetTypeNames = { "지정 좌표", "오브젝트 추적", "특정 방향 고정" };
+                    DrawPopup(ref rect, targetTypeProp, "타겟 기준", targetTypeNames);
+
+                    TargetType targetType = (TargetType)targetTypeProp.enumValueIndex;
+                    if (targetType == TargetType.SpecificPosition)
+                    {
+                        DrawXZField(ref rect, property, "targetPosition", "지정 좌표");
+                    }
+                    else if (targetType != TargetType.Direction)
+                    {
+                        DrawProperty(ref rect, property, "targetTag", "타겟 태그");
+                    }
+                }
+                else if (actionType == ActionType.FixedAttack)
+                {
+                    DrawXZField(ref rect, property, "targetPosition", "지정 좌표");
+                }
 
                 DrawProperty(ref rect, property, "damage", "데미지");
                 DrawProperty(ref rect, property, "knockbackForce", "넉백 힘 (X, Y, Z)");
@@ -340,9 +324,20 @@ public class ActionDataDrawer : UnityEditor.PropertyDrawer
                     string[] attackShapeNames = { "원형 (Sphere)", "사각형 (Box)", "원기둥 (Cylinder)" };
                     DrawPopup(ref rect, attackShapeProp, "공격 범위 도형", attackShapeNames);
 
-                    DrawProperty(ref rect, property, "attackRadius", "공격 반지름");
-                    DrawProperty(ref rect, property, "attackHeight", "공격 높이(원기둥)");
-                    DrawProperty(ref rect, property, "attackHitBoxSize", "공격 박스 크기");
+                    AttackShape shape = (AttackShape)attackShapeProp.enumValueIndex;
+                    if (shape == AttackShape.Sphere)
+                    {
+                        DrawProperty(ref rect, property, "attackRadius", "공격 반지름");
+                    }
+                    else if (shape == AttackShape.Cylinder)
+                    {
+                        DrawProperty(ref rect, property, "attackRadius", "공격 반지름");
+                        DrawProperty(ref rect, property, "attackHeight", "공격 높이(원기둥)");
+                    }
+                    else if (shape == AttackShape.Box)
+                    {
+                        DrawProperty(ref rect, property, "attackHitBoxSize", "공격 박스 크기");
+                    }
                 }
             }
             
@@ -397,6 +392,23 @@ public class ActionDataDrawer : UnityEditor.PropertyDrawer
         }
     }
 
+    private void DrawXZField(ref Rect rect, UnityEditor.SerializedProperty parent, string propName, string label)
+    {
+        UnityEditor.SerializedProperty prop = parent.FindPropertyRelative(propName);
+        if (prop != null)
+        {
+            Rect r = rect;
+            r.height = UnityEditor.EditorGUIUtility.singleLineHeight;
+            float[] values = new float[] { prop.vector3Value.x, prop.vector3Value.z };
+            GUIContent[] subLabels = new GUIContent[] { new GUIContent("X"), new GUIContent("Z") };
+            
+            UnityEditor.EditorGUI.MultiFloatField(r, new GUIContent(label), subLabels, values);
+            
+            prop.vector3Value = new Vector3(values[0], prop.vector3Value.y, values[1]);
+            rect.y += r.height + 2;
+        }
+    }
+
     public override float GetPropertyHeight(UnityEditor.SerializedProperty property, GUIContent label)
     {
         if (!property.isExpanded)
@@ -447,7 +459,7 @@ public class ActionDataDrawer : UnityEditor.PropertyDrawer
             if (targetType != TargetType.Direction)
             {
                 height += headerHeight;
-                height += AddProp(property, "targetOffset");
+                height += UnityEditor.EditorGUIUtility.singleLineHeight + 2;
                 if (!property.FindPropertyRelative("isTeleport").boolValue)
                 {
                     height += AddProp(property, "usePositionRefresh");
@@ -470,9 +482,7 @@ public class ActionDataDrawer : UnityEditor.PropertyDrawer
                 height += AddProp(property, "destinationStopDistance");
             }
 
-            bool isTrackingMode = (targetType == TargetType.TrackObject || 
-                                   targetType == TargetType.TrackObjectXOnly || 
-                                   targetType == TargetType.TrackObjectZOnly);
+            bool isTrackingMode = (targetType == TargetType.TrackObject);
 
             // 종료 조건 2: 타겟 감지 (추적 모드에서만)
             if (isTrackingMode)
@@ -503,11 +513,18 @@ public class ActionDataDrawer : UnityEditor.PropertyDrawer
         else 
         {
             height += headerHeight;
-            height += AddProp(property, "targetType"); 
-            TargetType targetType = (TargetType)property.FindPropertyRelative("targetType").enumValueIndex;
-            if (targetType == TargetType.SpecificPosition) height += AddProp(property, "targetPosition");
-            else if (targetType != TargetType.Direction) height += AddProp(property, "targetTag");
-
+            
+            if (actionType == ActionType.RangedAttack)
+            {
+                height += AddProp(property, "targetType"); 
+                TargetType targetType = (TargetType)property.FindPropertyRelative("targetType").enumValueIndex;
+                if (targetType == TargetType.SpecificPosition) height += UnityEditor.EditorGUIUtility.singleLineHeight + 2;
+                else if (targetType != TargetType.Direction) height += AddProp(property, "targetTag");
+            }
+            else if (actionType == ActionType.FixedAttack)
+            {
+                height += UnityEditor.EditorGUIUtility.singleLineHeight + 2;
+            }
 
             height += AddPropsCount(property, "damage", "knockbackForce", "attackOffset");
             
@@ -520,7 +537,10 @@ public class ActionDataDrawer : UnityEditor.PropertyDrawer
             {
                 height += headerHeight;
                 height += AddProp(property, "attackShape"); 
-                height += AddPropsCount(property, "attackRadius", "attackHeight", "attackHitBoxSize");
+                AttackShape shape = (AttackShape)property.FindPropertyRelative("attackShape").enumValueIndex;
+                if (shape == AttackShape.Sphere) height += AddProp(property, "attackRadius");
+                else if (shape == AttackShape.Cylinder) height += AddPropsCount(property, "attackRadius", "attackHeight");
+                else if (shape == AttackShape.Box) height += AddProp(property, "attackHitBoxSize");
             }
         }
 

@@ -388,7 +388,7 @@ public class CapsuleController : MonoBehaviour
                 
                 Vector3 targetDir = transform.forward;
                 
-                if (action.targetType == TargetType.TrackObject || action.targetType == TargetType.TrackObjectXOnly || action.targetType == TargetType.TrackObjectZOnly)
+                if (action.targetType == TargetType.TrackObject)
                 {
                     if (!string.IsNullOrEmpty(action.targetTag))
                     {
@@ -418,7 +418,7 @@ public class CapsuleController : MonoBehaviour
                 {
                     Vector3 basePos = transform.position;
                     
-                    if (action.targetType == TargetType.TrackObject || action.targetType == TargetType.TrackObjectXOnly || action.targetType == TargetType.TrackObjectZOnly)
+                    if (action.targetType == TargetType.TrackObject)
                     {
                         if (!string.IsNullOrEmpty(action.targetTag))
                         {
@@ -501,7 +501,7 @@ public class CapsuleController : MonoBehaviour
             }
 
             Vector3 finalTargetPos = action.targetPosition;
-            bool isTracking = action.targetType == TargetType.TrackObject || action.targetType == TargetType.TrackObjectXOnly || action.targetType == TargetType.TrackObjectZOnly;
+            bool isTracking = action.targetType == TargetType.TrackObject;
             Vector3 rawTargetPos = finalTargetPos; // 추적 원본 좌표 (오프셋 미적용)
 
             if (isTracking)

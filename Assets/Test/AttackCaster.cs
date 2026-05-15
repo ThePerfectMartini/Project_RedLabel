@@ -112,7 +112,7 @@ public class AttackCaster : MonoBehaviour
             Vector3 shootDir = transform.rotation * CapsuleController.GetDirectionFromEnum(data.moveDirection8);
             
             // ▼ 버그 수정 3: 매 발사 시점마다 타겟의 최신 위치를 새로 찾아서 방향을 갱신합니다.
-            if (data.targetType == TargetType.TrackObject || data.targetType == TargetType.TrackObjectXOnly || data.targetType == TargetType.TrackObjectZOnly)
+            if (data.targetType == TargetType.TrackObject)
             {
                 if (!string.IsNullOrEmpty(data.targetTag))
                 {
@@ -120,8 +120,8 @@ public class AttackCaster : MonoBehaviour
                     if (tGO != null)
                     {
                         Vector3 targetPos = tGO.transform.position;
-                        if (data.targetType == TargetType.TrackObjectXOnly) targetPos.z = spawnPos.z;
-                        if (data.targetType == TargetType.TrackObjectZOnly) targetPos.x = spawnPos.x;
+                        if (data.trackXOnly && !data.trackZOnly) targetPos.z = spawnPos.z;
+                        if (!data.trackXOnly && data.trackZOnly) targetPos.x = spawnPos.x;
                         
                         shootDir = (targetPos - spawnPos).normalized;
                     }

@@ -22,8 +22,6 @@ MonoBehaviour:
     animationName: Move
     targetType: 1
     targetPosition: {x: 0, y: 0, z: 0}
-    capturePositionAtExecution: 0
-    capturePositionTag: 
     targetTag: Player
     isTeleport: 0
     moveDirection8: 0
@@ -31,23 +29,25 @@ MonoBehaviour:
     jumpForce: 0
     trackXOnly: 0
     trackZOnly: 0
-    targetOffset: {x: 1, y: 0, z: 0}
+    targetOffset: {x: 2, y: 0, z: 0}
     usePositionRefresh: 1
     positionRefreshInterval: 0.5
     repeatRefreshUntilReached: 1
     refreshRepeatCount: 0
     startSpeed: 1
-    speed: 1
+    speed: 5
     useAcceleration: 0
     acceleration: 0.01
-    stopOnTargetReached: 0
-    distanceMode: 0
-    targetShape: 0
-    shapeOffset: {x: 0, y: 0, z: 0}
-    attackBoxSize: {x: 0, y: 0, z: 0}
-    stopDistance: 0
+    stopOnDestinationReached: 1
+    destinationStopDistance: 0.1
+    stopOnTargetDetected: 1
+    detectOrigin: 0
+    detectShape: 0
+    detectOffset: {x: -2, y: 0, z: 0}
+    detectRadius: 1
+    detectBoxSize: {x: 2, y: 2, z: 2}
     stopOnTimeLimit: 0
-    timeLimit: 0
+    timeLimit: 5
     damage: 0
     knockbackForce: {x: 0, y: 0, z: 0}
     attackShape: 0
@@ -61,14 +61,102 @@ MonoBehaviour:
     projectileSpeed: 0
     projectileLifeTime: 0
   - showGizmo: 1
-    actionType: 1
+    actionType: 2
+    executeParallel: 0
+    playAnimation: 1
+    animationName: Attack
+    targetType: 1
+    targetPosition: {x: 0, y: 0, z: 0}
+    targetTag: Player
+    isTeleport: 0
+    moveDirection8: 0
+    useJump: 0
+    jumpForce: 0
+    trackXOnly: 0
+    trackZOnly: 0
+    targetOffset: {x: 0, y: -2.37, z: 2.86}
+    usePositionRefresh: 1
+    positionRefreshInterval: 0.5
+    repeatRefreshUntilReached: 1
+    refreshRepeatCount: 1
+    startSpeed: 1
+    speed: 4
+    useAcceleration: 0
+    acceleration: 0.01
+    stopOnDestinationReached: 1
+    destinationStopDistance: 0.1
+    stopOnTargetDetected: 0
+    detectOrigin: 0
+    detectShape: 1
+    detectOffset: {x: -1.71, y: 0, z: 0}
+    detectRadius: 2.19
+    detectBoxSize: {x: 2, y: 2, z: 2}
+    stopOnTimeLimit: 1
+    timeLimit: 20
+    damage: 0
+    knockbackForce: {x: 10, y: 20, z: 0}
+    attackShape: 0
+    attackRadius: 2
+    attackHeight: 0
+    attackHitBoxSize: {x: 0, y: 0, z: 0}
+    attackOffset: {x: -2, y: 0, z: 0}
+    projectilePrefab: {fileID: 0}
+    projectileCount: 1
+    projectileInterval: 0
+    projectileSpeed: 0
+    projectileLifeTime: 0
+  - showGizmo: 0
+    actionType: 0
     executeParallel: 0
     playAnimation: 1
     animationName: Move
     targetType: 1
     targetPosition: {x: 0, y: 0, z: 0}
-    capturePositionAtExecution: 0
-    capturePositionTag: 
+    targetTag: Player
+    isTeleport: 0
+    moveDirection8: 0
+    useJump: 0
+    jumpForce: 0
+    trackXOnly: 0
+    trackZOnly: 0
+    targetOffset: {x: 0, y: 0, z: 0}
+    usePositionRefresh: 1
+    positionRefreshInterval: 0
+    repeatRefreshUntilReached: 0
+    refreshRepeatCount: 1
+    startSpeed: 1
+    speed: 20
+    useAcceleration: 0
+    acceleration: 0.01
+    stopOnDestinationReached: 1
+    destinationStopDistance: 0.1
+    stopOnTargetDetected: 0
+    detectOrigin: 0
+    detectShape: 0
+    detectOffset: {x: 0, y: 0, z: 0}
+    detectRadius: 1.5
+    detectBoxSize: {x: 2, y: 2, z: 2}
+    stopOnTimeLimit: 0
+    timeLimit: 5
+    damage: 0
+    knockbackForce: {x: 0, y: 0, z: 0}
+    attackShape: 0
+    attackRadius: 0
+    attackHeight: 0
+    attackHitBoxSize: {x: 0, y: 0, z: 0}
+    attackOffset: {x: 0, y: 0, z: 0}
+    projectilePrefab: {fileID: 0}
+    projectileCount: 1
+    projectileInterval: 0
+    projectileSpeed: 0
+    projectileLifeTime: 0
+  - showGizmo: 1
+    actionType: 2
+    executeParallel: 0
+    playAnimation: 1
+    animationName: Attack
+    targetType: 0
+    targetPosition: {x: 0, y: 0, z: 0}
     targetTag: Player
     isTeleport: 0
     moveDirection8: 0
@@ -85,14 +173,61 @@ MonoBehaviour:
     speed: 1
     useAcceleration: 0
     acceleration: 0.01
-    stopOnTargetReached: 0
-    distanceMode: 0
-    targetShape: 0
-    shapeOffset: {x: 0, y: 0, z: 0}
-    attackBoxSize: {x: 0, y: 0, z: 0}
-    stopDistance: 0
+    stopOnDestinationReached: 0
+    destinationStopDistance: 0.1
+    stopOnTargetDetected: 0
+    detectOrigin: 0
+    detectShape: 0
+    detectOffset: {x: 0, y: 0, z: 0}
+    detectRadius: 1.5
+    detectBoxSize: {x: 2, y: 2, z: 2}
     stopOnTimeLimit: 0
-    timeLimit: 1
+    timeLimit: 2
+    damage: 0
+    knockbackForce: {x: 0, y: 30, z: 0}
+    attackShape: 2
+    attackRadius: 10
+    attackHeight: 20
+    attackHitBoxSize: {x: 0, y: 0, z: 0}
+    attackOffset: {x: 0, y: 0, z: 0}
+    projectilePrefab: {fileID: 0}
+    projectileCount: 1
+    projectileInterval: 0
+    projectileSpeed: 0
+    projectileLifeTime: 0
+  - showGizmo: 0
+    actionType: 1
+    executeParallel: 0
+    playAnimation: 1
+    animationName: Idle
+    targetType: 1
+    targetPosition: {x: 0, y: 0, z: 0}
+    targetTag: Player
+    isTeleport: 0
+    moveDirection8: 0
+    useJump: 0
+    jumpForce: 0
+    trackXOnly: 0
+    trackZOnly: 0
+    targetOffset: {x: 1, y: 0, z: 0}
+    usePositionRefresh: 1
+    positionRefreshInterval: 0.5
+    repeatRefreshUntilReached: 1
+    refreshRepeatCount: 0
+    startSpeed: 1
+    speed: 1
+    useAcceleration: 0
+    acceleration: 0.01
+    stopOnDestinationReached: 0
+    destinationStopDistance: 0.1
+    stopOnTargetDetected: 0
+    detectOrigin: 0
+    detectShape: 0
+    detectOffset: {x: 0, y: 0, z: 0}
+    detectRadius: 1.5
+    detectBoxSize: {x: 2, y: 2, z: 2}
+    stopOnTimeLimit: 0
+    timeLimit: 2
     damage: 0
     knockbackForce: {x: 0, y: 0, z: 0}
     attackShape: 0
