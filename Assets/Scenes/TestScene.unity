@@ -133,9 +133,9 @@ GameObject:
   - component: {fileID: 64757739}
   - component: {fileID: 64757746}
   - component: {fileID: 64757743}
-  - component: {fileID: 64757744}
-  - component: {fileID: 64757745}
   - component: {fileID: 64757747}
+  - component: {fileID: 64757748}
+  - component: {fileID: 64757745}
   m_Layer: 7
   m_Name: Capsule
   m_TagString: Enemy
@@ -265,21 +265,6 @@ Rigidbody:
   m_Interpolate: 0
   m_Constraints: 112
   m_CollisionDetection: 0
---- !u!114 &64757744
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 64757738}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 0c4113f841694f92a087499b00fd1c5e, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::CapsuleController
-  actionSequence: {fileID: 11400000, guid: 8f2e4d00ebf2d9e46a89e71e8852b892, type: 2}
-  playOnStart: 1
-  animController: {fileID: 64757745}
 --- !u!114 &64757745
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -324,12 +309,28 @@ MonoBehaviour:
   m_GameObject: {fileID: 64757738}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 402ebd286e104c7abd054381a5e80ffc, type: 3}
+  m_Script: {fileID: 11500000, guid: edb4245ee467c344bbfc5dc85cc718b5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CapsuleController
+  animController: {fileID: 64757745}
+  rb: {fileID: 0}
+  actionSequence: {fileID: 11400000, guid: 8f2e4d00ebf2d9e46a89e71e8852b892, type: 2}
+  playOnStart: 1
+--- !u!114 &64757748
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 64757738}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 751c83abd66c9e547a88d34738bba959, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::AttackCaster
   targetLayer:
     serializedVersion: 2
-    m_Bits: 64
+    m_Bits: 192
 --- !u!1 &180801546
 GameObject:
   m_ObjectHideFlags: 0
