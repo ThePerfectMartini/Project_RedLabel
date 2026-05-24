@@ -32,6 +32,7 @@ public class ActionData
 
     public bool trackXOnly;
     public bool trackZOnly;
+    public bool snapToPlayerXAxis; // [원거리 투사체 + 오브젝트 추적 전용] 정확한 방향 대신 플레이어가 있는 좌/우로 스냅 발사
     
     
     // ▼ 목표 오프셋 (도착 지점을 정하는 유일한 오프셋)
@@ -82,10 +83,6 @@ public class ActionData
 [CreateAssetMenu(fileName = "NewActionSequence", menuName = "Action Sequence")]
 public class ActionSequenceSO : ScriptableObject
 {
-    [Header("시퀀스 반복 설정")]
-    public bool isInfiniteLoop;
-    public int repeatCount = 1;
-
     public List<ActionData> actions = new List<ActionData>();
 
     private void OnValidate()
@@ -93,9 +90,19 @@ public class ActionSequenceSO : ScriptableObject
         foreach (var action in actions)
         {
             if (action.speed <= 0f) action.speed = 0.01f;
-            if (action.startSpeed < 0f) action.startSpeed = 0f;
-            if (action.acceleration <= 0f) action.acceleration = 0.01f;
             if (action.timeLimit < 0f) action.timeLimit = 0f;
+
+            // 가속도 미사용 시 관련 값 초기화
+            if (!action.useAcceleration)
+            {
+                action.startSpeed = 0f;
+                action.acceleration = 0.01f;
+            }
+            else
+            {
+                if (action.startSpeed < 0f) action.startSpeed = 0f;
+                if (action.acceleration <= 0f) action.acceleration = 0.01f;
+            }
             
             if (action.projectileCount < 1) action.projectileCount = 1;
             if (action.projectileInterval < 0f) action.projectileInterval = 0f;
@@ -182,11 +189,13 @@ public class ActionDataDrawer : UnityEditor.PropertyDrawer
                     if (property.FindPropertyRelative("useJump").boolValue)
                         DrawProperty(ref rect, property, "jumpForce", " ㄴ 점프 힘");
                     
-                    DrawProperty(ref rect, property, "startSpeed", "시작 속도");
-                    DrawProperty(ref rect, property, "speed", "최대 속도");
+                    DrawProperty(ref rect, property, "speed", "속도");
                     DrawProperty(ref rect, property, "useAcceleration", "가속도 사용");
                     if (property.FindPropertyRelative("useAcceleration").boolValue)
+                    {
+                        DrawProperty(ref rect, property, "startSpeed", " ㄴ 시작 속도");
                         DrawProperty(ref rect, property, "acceleration", " ㄴ 가속도");
+                    }
                 }
 
                 DrawHeader(ref rect, "▶ 목표 기준 설정");
@@ -294,9 +303,14 @@ public class ActionDataDrawer : UnityEditor.PropertyDrawer
                     {
                         DrawXZField(ref rect, property, "targetPosition", "지정 좌표");
                     }
-                    else if (targetType != TargetType.Direction)
+                    else if (targetType == TargetType.Direction)
+                    {
+                        DrawProperty(ref rect, property, "moveDirection8", "발사 방향");
+                    }
+                    else // TrackObject
                     {
                         DrawProperty(ref rect, property, "targetTag", "타겟 태그");
+                        DrawProperty(ref rect, property, "snapToPlayerXAxis", "X축 방향 스냅 (좌/우 자동 판단)");
                     }
                 }
                 else if (actionType == ActionType.FixedAttack)
@@ -439,9 +453,9 @@ public class ActionDataDrawer : UnityEditor.PropertyDrawer
                 if (property.FindPropertyRelative("useJump").boolValue)
                     height += AddProp(property, "jumpForce");
                 
-                height += AddPropsCount(property, "startSpeed", "speed", "useAcceleration");
+                height += AddPropsCount(property, "speed", "useAcceleration");
                 if (property.FindPropertyRelative("useAcceleration").boolValue)
-                    height += AddProp(property, "acceleration");
+                    height += AddPropsCount(property, "startSpeed", "acceleration");
             }
 
             height += headerHeight;
@@ -519,7 +533,12 @@ public class ActionDataDrawer : UnityEditor.PropertyDrawer
                 height += AddProp(property, "targetType"); 
                 TargetType targetType = (TargetType)property.FindPropertyRelative("targetType").enumValueIndex;
                 if (targetType == TargetType.SpecificPosition) height += UnityEditor.EditorGUIUtility.singleLineHeight + 2;
-                else if (targetType != TargetType.Direction) height += AddProp(property, "targetTag");
+                else if (targetType == TargetType.Direction)   height += AddProp(property, "moveDirection8");
+                else
+                {
+                    height += AddProp(property, "targetTag");
+                    height += AddProp(property, "snapToPlayerXAxis");
+                }
             }
             else if (actionType == ActionType.FixedAttack)
             {

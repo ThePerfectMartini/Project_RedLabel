@@ -136,6 +136,8 @@ GameObject:
   - component: {fileID: 64757744}
   - component: {fileID: 64757745}
   - component: {fileID: 64757747}
+  - component: {fileID: 64757748}
+  - component: {fileID: 64757749}
   m_Layer: 7
   m_Name: Capsule
   m_TagString: Enemy
@@ -277,8 +279,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0c4113f841694f92a087499b00fd1c5e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CapsuleController
-  actionSequence: {fileID: 11400000, guid: 8f2e4d00ebf2d9e46a89e71e8852b892, type: 2}
-  playOnStart: 1
   animController: {fileID: 64757745}
 --- !u!114 &64757745
 MonoBehaviour:
@@ -330,6 +330,35 @@ MonoBehaviour:
   targetLayer:
     serializedVersion: 2
     m_Bits: 64
+--- !u!114 &64757748
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 64757738}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0ab3133e03aead649a26cdb6902d9476, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PhaseRunner
+  phase: {fileID: 11400000, guid: 127b3f4d54e4219499097bd4a3b38001, type: 2}
+  playOnStart: 1
+  controller: {fileID: 64757744}
+--- !u!114 &64757749
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 64757738}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1d231e0f0d2a51b4f891503b847bb59a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PhaseDebugMonitor
+  phase: {fileID: 11400000, guid: 127b3f4d54e4219499097bd4a3b38001, type: 2}
+  targetTag: Player
 --- !u!1 &180801546
 GameObject:
   m_ObjectHideFlags: 0

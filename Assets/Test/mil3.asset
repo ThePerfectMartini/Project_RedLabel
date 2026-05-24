@@ -1,0 +1,105 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 862587ca3bdf47cbbc0bc89990afa31f, type: 3}
+  m_Name: mil3
+  m_EditorClassIdentifier: Assembly-CSharp::ActionSequenceSO
+  actions:
+  - showGizmo: 0
+    actionType: 3
+    executeParallel: 0
+    playAnimation: 1
+    animationName: Attack
+    targetType: 0
+    targetPosition: {x: 0, y: 0, z: 0}
+    targetTag: 
+    isTeleport: 0
+    moveDirection8: 0
+    useJump: 0
+    jumpForce: 0
+    trackXOnly: 0
+    trackZOnly: 0
+    targetOffset: {x: 0, y: 0, z: 0}
+    usePositionRefresh: 0
+    positionRefreshInterval: 0
+    repeatRefreshUntilReached: 0
+    refreshRepeatCount: 0
+    startSpeed: 0
+    speed: 0.01
+    useAcceleration: 0
+    acceleration: 0.01
+    stopOnDestinationReached: 0
+    destinationStopDistance: 0
+    stopOnTargetDetected: 0
+    detectOrigin: 0
+    detectShape: 0
+    detectOffset: {x: 0, y: 0, z: 0}
+    detectRadius: 0
+    detectBoxSize: {x: 0, y: 0, z: 0}
+    stopOnTimeLimit: 0
+    timeLimit: 0
+    damage: 0
+    knockbackForce: {x: 0, y: 0, z: 0}
+    attackShape: 1
+    attackRadius: 0
+    attackHeight: 0
+    attackHitBoxSize: {x: 10, y: 10, z: 10}
+    attackOffset: {x: 0, y: 0, z: 0}
+    projectilePrefab: {fileID: 0}
+    projectileCount: 1
+    projectileInterval: 0
+    projectileSpeed: 0
+    projectileLifeTime: 0
+  - showGizmo: 0
+    actionType: 1
+    executeParallel: 0
+    playAnimation: 1
+    animationName: Idle
+    targetType: 0
+    targetPosition: {x: 0, y: 0, z: 0}
+    targetTag: 
+    isTeleport: 0
+    moveDirection8: 0
+    useJump: 0
+    jumpForce: 0
+    trackXOnly: 0
+    trackZOnly: 0
+    targetOffset: {x: 0, y: 0, z: 0}
+    usePositionRefresh: 0
+    positionRefreshInterval: 0
+    repeatRefreshUntilReached: 0
+    refreshRepeatCount: 0
+    startSpeed: 0
+    speed: 0.01
+    useAcceleration: 0
+    acceleration: 0.01
+    stopOnDestinationReached: 0
+    destinationStopDistance: 0
+    stopOnTargetDetected: 0
+    detectOrigin: 0
+    detectShape: 0
+    detectOffset: {x: 0, y: 0, z: 0}
+    detectRadius: 0
+    detectBoxSize: {x: 0, y: 0, z: 0}
+    stopOnTimeLimit: 0
+    timeLimit: 3
+    damage: 0
+    knockbackForce: {x: 0, y: 0, z: 0}
+    attackShape: 1
+    attackRadius: 0
+    attackHeight: 0
+    attackHitBoxSize: {x: 10, y: 10, z: 10}
+    attackOffset: {x: 0, y: 0, z: 0}
+    projectilePrefab: {fileID: 0}
+    projectileCount: 1
+    projectileInterval: 0
+    projectileSpeed: 0
+    projectileLifeTime: 0

@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 
 public class Projectile : MonoBehaviour
 {
@@ -6,6 +6,7 @@ public class Projectile : MonoBehaviour
     private Vector3 moveDirection;
     private LayerMask targetLayer;
     private GameObject attacker;
+    private AttackCaster attackCaster;
 
     public void Initialize(ActionData attackData, Vector3 direction, LayerMask layer, GameObject attackerObj)
     {
@@ -13,6 +14,7 @@ public class Projectile : MonoBehaviour
         moveDirection = direction.normalized;
         targetLayer = layer;
         attacker = attackerObj;
+        if (attacker) attackCaster = attacker.GetComponent<AttackCaster>();
 
         if (moveDirection != Vector3.zero)
         {
@@ -63,6 +65,8 @@ public class Projectile : MonoBehaviour
             }
 
             Destroy(gameObject);
+
+            if (attackCaster) attackCaster.NotifyRangedHit();
         }
     }
 }

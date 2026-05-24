@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using UnityEngine;
 
@@ -9,17 +10,34 @@ public class AttackCaster : MonoBehaviour
     
     private ActionData currentAttackData;
 
+    /// <summary>
+    /// 타격이 1회 이상 성공했을 때 발행되는 이벤트 (콤보 판정용)
+    /// </summary>
+    public event Action OnHitConfirmed;
+
     private float attackTriggerTime = -1f;
     private float gizmoBlueDuration = 0.2f; 
     
     private bool isFixedAttack;
     private Vector3 fixedWorldPosition;
+    private bool rangedHitConfirmed;
 
     public void SetAttackData(ActionData data, bool isFixed = false, Vector3 fixedPos = default)
     {
         currentAttackData = data;
         isFixedAttack = isFixed;
         fixedWorldPosition = fixedPos;
+        rangedHitConfirmed = false;
+    }
+
+    /// <summary>
+    /// 투사체가 타겟에 명중했을 때 호출. 첫 명중에만 콤보 이벤트를 발동합니다.
+    /// </summary>
+    public void NotifyRangedHit()
+    {
+        if (rangedHitConfirmed) return;
+        rangedHitConfirmed = true;
+        OnHitConfirmed?.Invoke();
     }
 
     public void CastDamage()
@@ -66,6 +84,9 @@ public class AttackCaster : MonoBehaviour
 
             hits = Physics.OverlapCapsule(capBottom, capTop, currentAttackData.attackRadius, targetLayer);
         }
+
+        if (hits.Length > 0)
+            OnHitConfirmed?.Invoke();
 
         foreach (Collider hitCol in hits)
         {
@@ -122,8 +143,18 @@ public class AttackCaster : MonoBehaviour
                         Vector3 targetPos = tGO.transform.position;
                         if (data.trackXOnly && !data.trackZOnly) targetPos.z = spawnPos.z;
                         if (!data.trackXOnly && data.trackZOnly) targetPos.x = spawnPos.x;
-                        
-                        shootDir = (targetPos - spawnPos).normalized;
+
+                        if (data.snapToPlayerXAxis)
+                        {
+                            // 플레이어가 있는 좌/우 방향으로 순수 X축 스냅
+                            float xSign = Mathf.Sign(targetPos.x - spawnPos.x);
+                            if (xSign == 0f) xSign = transform.right.x >= 0f ? 1f : -1f; // 정확히 겹칠 경우 현재 방향 사용
+                            shootDir = new Vector3(xSign, 0f, 0f);
+                        }
+                        else
+                        {
+                            shootDir = (targetPos - spawnPos).normalized;
+                        }
                     }
                 }
             }
