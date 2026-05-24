@@ -292,7 +292,203 @@ public class PhaseRunner : MonoBehaviour
         if (!playerObj) return Vector3.zero;
 
         Vector3 diff = playerObj.transform.position - transform.position;
-        diff.y = 0f; // Y축 제외, 수평 벡터만 반환
+        diff.y = 0f;
         return diff;
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // 기즈모 (씬 뷰 + 플레이 모드 모두 표시)
+    // ═══════════════════════════════════════════════════════════
+    private static readonly Color[] GizmoColors =
+    {
+        new Color(1f,  0.3f, 0.3f, 1f),  // 빨강
+        new Color(0.3f, 0.7f, 1f,  1f),  // 파랑
+        new Color(0.3f, 1f,  0.3f, 1f),  // 초록
+        new Color(1f,  0.85f, 0.1f, 1f), // 노랑
+        new Color(0.8f, 0.3f, 1f,  1f),  // 보라
+        new Color(1f,  0.55f, 0.1f, 1f), // 주황
+    };
+
+    private void OnDrawGizmos()
+    {
+        if (!phase) return;
+
+        for (int i = 0; i < phase.entries.Count; i++)
+        {
+            PhaseEntry entry = phase.entries[i];
+            Color col = GizmoColors[i % GizmoColors.Length];
+
+            // 메인 시퀀스 공격 기즈모
+            if (entry.showGizmos && entry.actionSequence)
+            {
+                foreach (var action in entry.actionSequence.actions)
+                    DrawActionGizmo(action, col);
+            }
+
+            // 거리 범위 기즈모
+            if (entry.showRangeGizmo)
+                DrawRangeGizmo(entry, col);
+
+            // 콤보 후속 시퀀스 기즈모 (각각 독립 토글)
+            if (entry.comboFollowUps != null)
+            {
+                // 후속은 같은 색이지만 조금 더 투명하게 구분
+                Color comboCol = new Color(col.r, col.g, col.b, col.a * 0.6f);
+                for (int j = 0; j < entry.comboFollowUps.Count; j++)
+                {
+                    bool showComboGizmo = entry.comboFollowUpGizmos != null
+                        && j < entry.comboFollowUpGizmos.Count
+                        && entry.comboFollowUpGizmos[j];
+
+                    if (showComboGizmo && entry.comboFollowUps[j])
+                    {
+                        foreach (var action in entry.comboFollowUps[j].actions)
+                            DrawActionGizmo(action, comboCol);
+                    }
+                }
+            }
+        }
+    }
+
+    private void DrawActionGizmo(ActionData action, Color color)
+    {
+        if (action.actionType != ActionType.VariableAttack &&
+            action.actionType != ActionType.FixedAttack &&
+            action.actionType != ActionType.RangedAttack)
+            return;
+
+        // 원거리: 발사 지점만 작은 구로 표시
+        if (action.actionType == ActionType.RangedAttack)
+        {
+            Gizmos.color = new Color(color.r, color.g, color.b, 0.8f);
+            Vector3 spawnPos = transform.position + (transform.rotation * action.attackOffset);
+            Gizmos.DrawWireSphere(spawnPos, 0.12f);
+            return;
+        }
+
+        Vector3 center = action.actionType == ActionType.FixedAttack
+            ? action.targetPosition
+            : transform.position + (transform.rotation * action.attackOffset);
+
+        Gizmos.color = new Color(color.r, color.g, color.b, 0.85f);
+        Color fillColor = new Color(color.r, color.g, color.b, 0.12f);
+
+        switch (action.attackShape)
+        {
+            case AttackShape.Sphere:
+                Gizmos.DrawWireSphere(center, action.attackRadius);
+                Gizmos.color = fillColor;
+                Gizmos.DrawSphere(center, action.attackRadius);
+                break;
+
+            case AttackShape.Box:
+                Quaternion boxRot = action.actionType == ActionType.FixedAttack
+                    ? Quaternion.identity : transform.rotation;
+                Matrix4x4 prev = Gizmos.matrix;
+                Gizmos.matrix = Matrix4x4.TRS(center, boxRot, Vector3.one);
+                Gizmos.color = new Color(color.r, color.g, color.b, 0.85f);
+                Gizmos.DrawWireCube(Vector3.zero, action.attackHitBoxSize);
+                Gizmos.color = fillColor;
+                Gizmos.DrawCube(Vector3.zero, action.attackHitBoxSize);
+                Gizmos.matrix = prev;
+                break;
+
+            case AttackShape.Cylinder:
+                Gizmos.color = new Color(color.r, color.g, color.b, 0.85f);
+                DrawGizmoCylinder(center, action.attackRadius, action.attackHeight);
+                break;
+        }
+    }
+
+    private void DrawGizmoCylinder(Vector3 center, float radius, float height)
+    {
+        float halfH = height * 0.5f;
+        Vector3 top = center + Vector3.up * halfH;
+        Vector3 bot = center - Vector3.up * halfH;
+        DrawGizmoCircle(top, radius);
+        DrawGizmoCircle(bot, radius);
+        Gizmos.DrawLine(top + Vector3.right   * radius, bot + Vector3.right   * radius);
+        Gizmos.DrawLine(top - Vector3.right   * radius, bot - Vector3.right   * radius);
+        Gizmos.DrawLine(top + Vector3.forward * radius, bot + Vector3.forward * radius);
+        Gizmos.DrawLine(top - Vector3.forward * radius, bot - Vector3.forward * radius);
+    }
+
+    private void DrawGizmoCircle(Vector3 center, float radius)
+    {
+        int segments = 24;
+        float step = 360f / segments * Mathf.Deg2Rad;
+        Vector3 prev = center + new Vector3(radius, 0f, 0f);
+        for (int i = 1; i <= segments; i++)
+        {
+            float a = i * step;
+            Vector3 next = center + new Vector3(Mathf.Cos(a) * radius, 0f, Mathf.Sin(a) * radius);
+            Gizmos.DrawLine(prev, next);
+            prev = next;
+        }
+    }
+
+    // ─── 거리 범위 기즈모 ───────────────────────────────────────
+
+    private void DrawRangeGizmo(PhaseEntry entry, Color color)
+    {
+        if (entry.distanceMode == DistanceWeightMode.Constant) return;
+
+        float minD = entry.minDistance;
+        float maxD = Mathf.Max(entry.maxDistance, minD + 0.01f);
+        Vector3 origin = transform.position;
+
+        switch (entry.distanceMode)
+        {
+            case DistanceWeightMode.CloseRange:
+            case DistanceWeightMode.FarRange:
+                // 최소 거리: 반투명 링, 최대 거리: 진한 링
+                Gizmos.color = new Color(color.r, color.g, color.b, 0.3f);
+                DrawGizmoCircle(origin, minD);
+                Gizmos.color = new Color(color.r, color.g, color.b, 0.85f);
+                DrawGizmoCircle(origin, maxD);
+                break;
+
+            case DistanceWeightMode.XAxis_Close:
+            case DistanceWeightMode.XAxis_Far:
+                DrawXAxisRangeCorridor(origin, minD, maxD, entry.alignThreshold, color);
+                break;
+
+            case DistanceWeightMode.ZAxis_Close:
+            case DistanceWeightMode.ZAxis_Far:
+                DrawZAxisRangeCorridor(origin, minD, maxD, entry.alignThreshold, color);
+                break;
+        }
+    }
+
+    /// <summary>X축 돌진 모드: Z 정렬 통로 + X 거리 범위를 고통로 표시</summary>
+    private void DrawXAxisRangeCorridor(Vector3 origin, float minD, float maxD, float alignT, Color color)
+    {
+        // Z 정렬 경계선 (상/하 수평선)
+        Gizmos.color = new Color(color.r, color.g, color.b, 0.75f);
+        Gizmos.DrawLine(origin + new Vector3(-maxD, 0f, -alignT), origin + new Vector3(+maxD, 0f, -alignT));
+        Gizmos.DrawLine(origin + new Vector3(-maxD, 0f, +alignT), origin + new Vector3(+maxD, 0f, +alignT));
+        // X 최대 거리 경계선 (좌/우 수직선)
+        Gizmos.DrawLine(origin + new Vector3(-maxD, 0f, -alignT), origin + new Vector3(-maxD, 0f, +alignT));
+        Gizmos.DrawLine(origin + new Vector3(+maxD, 0f, -alignT), origin + new Vector3(+maxD, 0f, +alignT));
+        // X 최소 거리 경계선 (안직선, 더 희리)
+        Gizmos.color = new Color(color.r, color.g, color.b, 0.3f);
+        Gizmos.DrawLine(origin + new Vector3(-minD, 0f, -alignT), origin + new Vector3(-minD, 0f, +alignT));
+        Gizmos.DrawLine(origin + new Vector3(+minD, 0f, -alignT), origin + new Vector3(+minD, 0f, +alignT));
+    }
+
+    /// <summary>Z축 기습 모드: X 정렬 통로 + Z 거리 범위를 고통로 표시</summary>
+    private void DrawZAxisRangeCorridor(Vector3 origin, float minD, float maxD, float alignT, Color color)
+    {
+        // X 정렬 경계선 (좌/우 수직선)
+        Gizmos.color = new Color(color.r, color.g, color.b, 0.75f);
+        Gizmos.DrawLine(origin + new Vector3(-alignT, 0f, -maxD), origin + new Vector3(-alignT, 0f, +maxD));
+        Gizmos.DrawLine(origin + new Vector3(+alignT, 0f, -maxD), origin + new Vector3(+alignT, 0f, +maxD));
+        // Z 최대 거리 경계선 (상/하 수평선)
+        Gizmos.DrawLine(origin + new Vector3(-alignT, 0f, -maxD), origin + new Vector3(+alignT, 0f, -maxD));
+        Gizmos.DrawLine(origin + new Vector3(-alignT, 0f, +maxD), origin + new Vector3(+alignT, 0f, +maxD));
+        // Z 최소 거리 경계선 (안직선, 더 희리)
+        Gizmos.color = new Color(color.r, color.g, color.b, 0.3f);
+        Gizmos.DrawLine(origin + new Vector3(-alignT, 0f, -minD), origin + new Vector3(+alignT, 0f, -minD));
+        Gizmos.DrawLine(origin + new Vector3(-alignT, 0f, +minD), origin + new Vector3(+alignT, 0f, +minD));
     }
 }

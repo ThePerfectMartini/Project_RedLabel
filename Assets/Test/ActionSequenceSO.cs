@@ -161,7 +161,6 @@ public class ActionDataDrawer : UnityEditor.PropertyDrawer
         {
             UnityEditor.EditorGUI.indentLevel++;
 
-            DrawProperty(ref rect, property, "showGizmo", "기즈모 표시");
             DrawProperty(ref rect, property, "executeParallel", "병렬 실행 (동시 실행)");
             
             DrawDivider(ref rect);
@@ -434,7 +433,7 @@ public class ActionDataDrawer : UnityEditor.PropertyDrawer
         
         ActionType actionType = (ActionType)property.FindPropertyRelative("actionType").enumValueIndex;
 
-        height += AddPropsCount(property, "showGizmo", "executeParallel");
+        height += AddProp(property, "executeParallel");
         height += dividerHeight;
         height += AddProp(property, "playAnimation");
         if (playAnim) height += AddProp(property, "animationName");

@@ -73,6 +73,12 @@ public class PhaseEntry
     [Tooltip("기본 가중치 (높을수록 선택 확률 증가)")]
     public float baseWeight = 1f;
 
+    [Tooltip("씨 뷰에서 이 시퀀스의 공격 범위 기즈모를 표시")]
+    public bool showGizmos = false;
+
+    [Tooltip("씨 뷰에서 이 엔트리의 거리(Min/Max) 활성화 범위를 기즈모로 표시")]
+    public bool showRangeGizmo = false;
+
     [Header("거리 가중치 설정")]
     [Tooltip("거리에 따른 가중치 변화 방향")]
     public DistanceWeightMode distanceMode = DistanceWeightMode.Constant;
@@ -97,6 +103,9 @@ public class PhaseEntry
 
     [Tooltip("콤보 후속 시퀀스 목록 (타격 성공 시 순차 실행)")]
     public List<ActionSequenceSO> comboFollowUps = new List<ActionSequenceSO>();
+
+    [Tooltip("콤보 후속 시퀀스별 기즈모 표시 토글 (콤보후속과 1:1 대응)")]
+    public List<bool> comboFollowUpGizmos = new List<bool>();
 
     /// <summary>
     /// 현재 상대 위치에 대한 가중치 곱수를 반환.
@@ -243,14 +252,19 @@ public class PhaseSOEditor : UnityEditor.Editor
             var alignThresholdProp    = entryProp.FindPropertyRelative("alignThreshold");
             var frontFacingOnlyProp   = entryProp.FindPropertyRelative("frontFacingOnly");
             var isComboProp           = entryProp.FindPropertyRelative("isComboStarter");
-            var comboFollowUpsProp    = entryProp.FindPropertyRelative("comboFollowUps");
+            var comboFollowUpsProp     = entryProp.FindPropertyRelative("comboFollowUps");
+            var comboGizmosProp        = entryProp.FindPropertyRelative("comboFollowUpGizmos");
+            var showGizmosProp        = entryProp.FindPropertyRelative("showGizmos");
+            var showRangeGizmoProp    = entryProp.FindPropertyRelative("showRangeGizmo");
 
             // Foldout 헤더
             string seqName = seqProp.objectReferenceValue
                 ? seqProp.objectReferenceValue.name
                 : "(없음)";
 
-            string comboTag = isComboProp.boolValue ? " [콤보]" : "";
+            string comboTag     = isComboProp.boolValue        ? " [콤보]" : "";
+            string gizmoTag     = showGizmosProp.boolValue     ? " [기즈모]" : "";
+            string rangeTag     = showRangeGizmoProp.boolValue ? " [범위]" : "";
 
             // 모드 태그
             DistanceWeightMode mode = (DistanceWeightMode)distModeProp.enumValueIndex;
@@ -268,7 +282,23 @@ public class PhaseSOEditor : UnityEditor.Editor
             UnityEditor.EditorGUILayout.BeginHorizontal();
 
             foldouts[i] = UnityEditor.EditorGUILayout.Foldout(foldouts[i],
-                $"#{i}  {seqName}{modeTag}{comboTag}", true, UnityEditor.EditorStyles.foldoutHeader);
+                $"#{i}  {seqName}{modeTag}{comboTag}{gizmoTag}{rangeTag}", true, UnityEditor.EditorStyles.foldoutHeader);
+
+            // 기즈모 토글 버튼 — 공격 범위 표시
+            Color prevBg = GUI.backgroundColor;
+            GUI.backgroundColor = showGizmosProp.boolValue ? new Color(0.4f, 1f, 0.5f) : Color.white;
+            bool newGizmo = GUILayout.Toggle(showGizmosProp.boolValue,
+                new GUIContent("👁", "코공격 범위 기즈모 표시"),
+                UnityEditor.EditorStyles.miniButton, GUILayout.Width(26));
+            if (newGizmo != showGizmosProp.boolValue) showGizmosProp.boolValue = newGizmo;
+
+            // 거리 범위 토글 버튼 — Min/Max 일수 범위 표시
+            GUI.backgroundColor = showRangeGizmoProp.boolValue ? new Color(0.3f, 0.85f, 1f) : Color.white;
+            bool newRange = GUILayout.Toggle(showRangeGizmoProp.boolValue,
+                new GUIContent("◎", "거리 Min/Max 범위 기즈모 표시"),
+                UnityEditor.EditorStyles.miniButton, GUILayout.Width(26));
+            if (newRange != showRangeGizmoProp.boolValue) showRangeGizmoProp.boolValue = newRange;
+            GUI.backgroundColor = prevBg;
 
             GUI.enabled = i > 0;
             if (GUILayout.Button("▲", GUILayout.Width(25))) moveUpIndex = i;
@@ -349,7 +379,66 @@ public class PhaseSOEditor : UnityEditor.Editor
                         "타격 실패 시 콤보가 끊기고 다시 가중치 선택으로 돌아갑니다.",
                         UnityEditor.MessageType.Info);
 
-                    UnityEditor.EditorGUILayout.PropertyField(comboFollowUpsProp, new GUIContent("콤보 후속 시퀀스"), true);
+                    // 콤보 후속 리스트: 기즈모 토글 병렬 커스텀 렌더링
+                    // ─ 리스트 크기 자동 동기화 ─
+                    while (comboGizmosProp.arraySize < comboFollowUpsProp.arraySize)
+                        comboGizmosProp.InsertArrayElementAtIndex(comboGizmosProp.arraySize);
+                    while (comboGizmosProp.arraySize > comboFollowUpsProp.arraySize)
+                        comboGizmosProp.DeleteArrayElementAtIndex(comboGizmosProp.arraySize - 1);
+
+                    UnityEditor.EditorGUILayout.LabelField("콤보 후속 시퀀스", UnityEditor.EditorStyles.boldLabel);
+
+                    // 각 요소 렌더링
+                    int comboDeleteIndex = -1;
+                    for (int j = 0; j < comboFollowUpsProp.arraySize; j++)
+                    {
+                        var elemProp  = comboFollowUpsProp.GetArrayElementAtIndex(j);
+                        var gizmoProp = comboGizmosProp.GetArrayElementAtIndex(j);
+
+                        UnityEditor.EditorGUILayout.BeginHorizontal();
+
+                        UnityEditor.EditorGUILayout.PropertyField(
+                            elemProp, new GUIContent($"  후속 [{j}]"), GUILayout.MinWidth(80));
+
+                        // 기즈모 토글
+                        Color prevBg2 = GUI.backgroundColor;
+                        GUI.backgroundColor = gizmoProp.boolValue ? new Color(0.4f, 1f, 0.5f) : Color.white;
+                        bool ng = GUILayout.Toggle(gizmoProp.boolValue,
+                            new GUIContent("👁", "콤보 후속 기즈모 표시"),
+                            UnityEditor.EditorStyles.miniButton, GUILayout.Width(26));
+                        if (ng != gizmoProp.boolValue) gizmoProp.boolValue = ng;
+                        GUI.backgroundColor = prevBg2;
+
+                        // 삭제 버튼
+                        if (GUILayout.Button("✕", GUILayout.Width(22))) comboDeleteIndex = j;
+
+                        UnityEditor.EditorGUILayout.EndHorizontal();
+                    }
+
+                    // 삭제 수행 (ObjectRef는 첫 호출에 null 세팅, 두 번째에 제거)
+                    if (comboDeleteIndex >= 0)
+                    {
+                        var target = comboFollowUpsProp.GetArrayElementAtIndex(comboDeleteIndex);
+                        if (target.objectReferenceValue != null)
+                            target.objectReferenceValue = null;
+                        else
+                            comboFollowUpsProp.DeleteArrayElementAtIndex(comboDeleteIndex);
+
+                        if (comboDeleteIndex < comboGizmosProp.arraySize)
+                            comboGizmosProp.DeleteArrayElementAtIndex(comboDeleteIndex);
+                    }
+
+                    // 추가 버튼
+                    UnityEditor.EditorGUILayout.BeginHorizontal();
+                    GUILayout.FlexibleSpace();
+                    if (GUILayout.Button("+ 후속 추가", GUILayout.Width(90)))
+                    {
+                        comboFollowUpsProp.InsertArrayElementAtIndex(comboFollowUpsProp.arraySize);
+                        comboFollowUpsProp.GetArrayElementAtIndex(comboFollowUpsProp.arraySize - 1).objectReferenceValue = null;
+                        comboGizmosProp.InsertArrayElementAtIndex(comboGizmosProp.arraySize);
+                        comboGizmosProp.GetArrayElementAtIndex(comboGizmosProp.arraySize - 1).boolValue = false;
+                    }
+                    UnityEditor.EditorGUILayout.EndHorizontal();
                 }
 
                 UnityEditor.EditorGUI.indentLevel--;
