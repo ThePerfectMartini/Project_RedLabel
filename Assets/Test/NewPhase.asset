@@ -14,11 +14,13 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PhaseSO
   isInfiniteLoop: 1
   repeatCount: 3
-  repeatPenalty: 0.5
+  repeatPenalty: 0
   targetTag: Player
   entries:
   - actionSequence: {fileID: 11400000, guid: 8f2e4d00ebf2d9e46a89e71e8852b892, type: 2}
     baseWeight: 1
+    showGizmos: 0
+    showRangeGizmo: 0
     distanceMode: 1
     interpolation: 0
     minDistance: 0
@@ -28,8 +30,11 @@ MonoBehaviour:
     isComboStarter: 1
     comboFollowUps:
     - {fileID: 11400000, guid: 708a5d84996cf634596f788933bd6fec, type: 2}
+    comboFollowUpGizmos: 00
   - actionSequence: {fileID: 11400000, guid: 57157323be2fac348b262f015b809a40, type: 2}
-    baseWeight: 1
+    baseWeight: 111
+    showGizmos: 0
+    showRangeGizmo: 0
     distanceMode: 1
     interpolation: 0
     minDistance: 0
@@ -39,8 +44,11 @@ MonoBehaviour:
     isComboStarter: 0
     comboFollowUps:
     - {fileID: 11400000, guid: 70fd49afade93f542aaa9b52c59ca69b, type: 2}
+    comboFollowUpGizmos: 
   - actionSequence: {fileID: 11400000, guid: 9b1363bcd98e4e040bc1a50a2f7b1db7, type: 2}
     baseWeight: 1
+    showGizmos: 0
+    showRangeGizmo: 0
     distanceMode: 4
     interpolation: 0
     minDistance: 0
@@ -50,3 +58,4 @@ MonoBehaviour:
     isComboStarter: 0
     comboFollowUps:
     - {fileID: 11400000, guid: 70fd49afade93f542aaa9b52c59ca69b, type: 2}
+    comboFollowUpGizmos: 

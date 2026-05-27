@@ -5,27 +5,37 @@ public abstract class ActionState
 {
     protected CapsuleController controller;
     protected ActionData actionData;
+    protected InterruptToken interruptToken;
+    protected Transform cachedTarget;
 
-    public ActionState(CapsuleController controller, ActionData actionData)
+    /// <param name="token">시퀀스 중단 토큰 (null 허용 — 중단 기능 미사용 시)</param>
+    /// <param name="cachedTarget">PhaseRunner 가 미리 캐싱한 타겟 Transform (null 허용)</param>
+    public ActionState(CapsuleController controller, ActionData actionData,
+                       InterruptToken token = null, Transform cachedTarget = null)
     {
-        this.controller = controller;
-        this.actionData = actionData;
+        this.controller    = controller;
+        this.actionData    = actionData;
+        this.interruptToken = token;
+        this.cachedTarget  = cachedTarget;
     }
 
     public abstract IEnumerator Execute();
-    
+
+    /// <summary>
+    /// 중단 토큰이 설정되었는지 확인합니다.
+    /// 코루틴 루프 내 매 프레임 호출해 안전하게 탈출하세요.
+    /// </summary>
+    protected bool ShouldInterrupt()
+        => interruptToken != null && interruptToken.IsInterrupted;
+
     protected void PlayAnimation(bool forceRestart = false)
     {
         if (actionData.playAnimation && controller.animController != null && !string.IsNullOrEmpty(actionData.animationName))
         {
             if (forceRestart && controller.animController.animator != null)
-            {
                 controller.animController.animator.Play(actionData.animationName, -1, 0f);
-            }
             else
-            {
                 controller.animController.Play(actionData.animationName);
-            }
         }
     }
 
@@ -33,18 +43,21 @@ public abstract class ActionState
     {
         if (actionData.targetType == TargetType.TrackObject)
         {
+            // 캐싱된 타겟 우선 사용 → FindWithTag 횟수 최소화
+            if (cachedTarget) return cachedTarget;
             GameObject targetGO = GameObject.FindWithTag(actionData.targetTag);
             if (targetGO != null) return targetGO.transform;
         }
         return null;
     }
-
-
 }
+
 
 public class MoveState : ActionState
 {
-    public MoveState(CapsuleController controller, ActionData actionData) : base(controller, actionData) { }
+    public MoveState(CapsuleController controller, ActionData actionData,
+                     InterruptToken token = null, Transform cachedTarget = null)
+        : base(controller, actionData, token, cachedTarget) { }
 
     public override IEnumerator Execute()
     {
@@ -80,7 +93,8 @@ public class MoveState : ActionState
             yield return controller.StartCoroutine(controller.MoveInDirection(
                 dir,
                 actionData.startSpeed, actionData.speed, actionData.useAcceleration, actionData.acceleration,
-                actionData.stopOnTimeLimit, actionData.timeLimit
+                actionData.stopOnTimeLimit, actionData.timeLimit,
+                interruptToken
             ));
         }
         else 
@@ -96,7 +110,7 @@ public class MoveState : ActionState
             }
 
             yield return controller.StartCoroutine(controller.MoveToTarget(
-                trackingTarget, specificPos, isTracking, actionData
+                trackingTarget, specificPos, isTracking, actionData, interruptToken
             ));
         }
     }
@@ -113,6 +127,12 @@ public class MoveState : ActionState
             case MoveDirection8.UpRight: return new Vector3(1, 0, 1).normalized;
             case MoveDirection8.DownLeft: return new Vector3(-1, 0, -1).normalized;
             case MoveDirection8.DownRight: return new Vector3(1, 0, -1).normalized;
+            case MoveDirection8.Forward:
+                // 캐릭터가 현재 바라보는 월드 기준 앞 방향 (로컬 left 방향이 2.5D 앞)
+                return controller.transform.rotation * Vector3.left;
+            case MoveDirection8.Backward:
+                // 캐릭터가 현재 바라보는 월드 기준 뒤 방향 (로컬 right 방향이 2.5D 뒤)
+                return controller.transform.rotation * Vector3.right;
             default: return Vector3.zero;
         }
     }
@@ -120,23 +140,35 @@ public class MoveState : ActionState
 
 public class WaitState : ActionState
 {
-    public WaitState(CapsuleController controller, ActionData actionData) : base(controller, actionData) { }
+    public WaitState(CapsuleController controller, ActionData actionData,
+                     InterruptToken token = null, Transform cachedTarget = null)
+        : base(controller, actionData, token, cachedTarget) { }
 
     public override IEnumerator Execute()
     {
-        PlayAnimation(); 
-        yield return new WaitForSeconds(actionData.timeLimit);
+        PlayAnimation();
+        float elapsed = 0f;
+        while (elapsed < actionData.timeLimit)
+        {
+            if (ShouldInterrupt()) yield break;
+            elapsed += UnityEngine.Time.deltaTime;
+            yield return null;
+        }
     }
 }
 
 public class AttackState : ActionState
 {
-    public AttackState(CapsuleController controller, ActionData actionData) : base(controller, actionData) { }
+    public AttackState(CapsuleController controller, ActionData actionData,
+                       InterruptToken token = null, Transform cachedTarget = null)
+        : base(controller, actionData, token, cachedTarget) { }
 
     public override IEnumerator Execute()
     {
+        if (ShouldInterrupt()) yield break;
+
         AttackCaster caster = controller.GetComponent<AttackCaster>();
-        if (caster != null)
+        if (caster)
         {
             Vector3 fixedPos = Vector3.zero;
             bool isFixed = actionData.actionType == ActionType.FixedAttack;
@@ -144,25 +176,31 @@ public class AttackState : ActionState
             if (isFixed)
             {
                 Transform target = GetResolvedTarget();
-                if (target != null)
-                {
+                if (target)
                     fixedPos = target.position + actionData.attackOffset;
-                }
                 else if (actionData.targetType == TargetType.SpecificPosition)
-                {
                     fixedPos = actionData.targetPosition + actionData.attackOffset;
-                }
-                else 
-                {
+                else
                     fixedPos = controller.transform.position + actionData.attackOffset;
-                }
-                
+
                 caster.SetAttackData(actionData, true, fixedPos);
             }
             else
             {
                 caster.SetAttackData(actionData, false, Vector3.zero);
             }
+
+            // 시작 시 즉시 타격 판정 플래그가 참일 때만 명시적으로 CastDamage 호출
+            if (actionData.castDamageOnStart)
+            {
+                caster.CastDamage();
+            }
+        }
+
+        // 공격 시 동시 점프(도약) 물리 적용 (승룡권 등)
+        if (actionData.useJumpInAttack)
+        {
+            controller.Jump(actionData.attackJumpForce);
         }
 
         PlayAnimation(true);
@@ -170,21 +208,31 @@ public class AttackState : ActionState
         if (controller.animController != null && actionData.playAnimation)
         {
             float animLength = controller.animController.GetAnimationLength(actionData.animationName);
-            yield return new WaitForSeconds(animLength);
+            float elapsed = 0f;
+            while (elapsed < animLength)
+            {
+                if (ShouldInterrupt()) yield break;
+                elapsed += UnityEngine.Time.deltaTime;
+                yield return null;
+            }
         }
         else if (!actionData.playAnimation)
         {
-            yield return null; 
+            yield return null;
         }
     }
 }
 
 public class RangedAttackState : ActionState
 {
-    public RangedAttackState(CapsuleController controller, ActionData actionData) : base(controller, actionData) { }
+    public RangedAttackState(CapsuleController controller, ActionData actionData,
+                              InterruptToken token = null, Transform cachedTarget = null)
+        : base(controller, actionData, token, cachedTarget) { }
 
     public override IEnumerator Execute()
     {
+        if (ShouldInterrupt()) yield break;
+
         AttackCaster caster = controller.GetComponent<AttackCaster>();
         if (caster != null)
         {
@@ -210,21 +258,22 @@ public class RangedAttackState : ActionState
 
         float animLength = 0f;
         if (controller.animController != null && actionData.playAnimation)
-        {
             animLength = controller.animController.GetAnimationLength(actionData.animationName);
-        }
 
-        float totalShootTime = 0f;
-        if (actionData.projectileCount > 1)
-        {
-            totalShootTime = (actionData.projectileCount - 1) * actionData.projectileInterval;
-        }
+        float totalShootTime = actionData.projectileCount > 1
+            ? (actionData.projectileCount - 1) * actionData.projectileInterval
+            : 0f;
 
         float waitTime = Mathf.Max(animLength, totalShootTime);
-        
         if (waitTime > 0f)
         {
-            yield return new WaitForSeconds(waitTime);
+            float elapsed = 0f;
+            while (elapsed < waitTime)
+            {
+                if (ShouldInterrupt()) yield break;
+                elapsed += UnityEngine.Time.deltaTime;
+                yield return null;
+            }
         }
         else
         {

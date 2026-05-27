@@ -27,6 +27,7 @@ MonoBehaviour:
     jumpForce: 0
     trackXOnly: 0
     trackZOnly: 0
+    snapToPlayerXAxis: 0
     targetOffset: {x: 0, y: 0, z: 0}
     usePositionRefresh: 0
     positionRefreshInterval: 0
@@ -47,7 +48,7 @@ MonoBehaviour:
     stopOnTimeLimit: 0
     timeLimit: 0
     damage: 0
-    knockbackForce: {x: 0, y: 0, z: 0}
+    knockbackForce: {x: 5, y: 5, z: 0}
     attackShape: 1
     attackRadius: 0
     attackHeight: 0
@@ -58,6 +59,15 @@ MonoBehaviour:
     projectileInterval: 0
     projectileSpeed: 0
     projectileLifeTime: 0
+    hitStunDuration: 1
+    hitStopDuration: 0
+    staggerValue: 10
+    isLauncher: 1
+    canBeParried: 1
+    isUnblockable: 0
+    allowMoveWhileAttacking: 0
+    forwardMoveOnly: 1
+    attackMoveSpeed: 2
   - showGizmo: 0
     actionType: 1
     executeParallel: 0
@@ -72,6 +82,7 @@ MonoBehaviour:
     jumpForce: 0
     trackXOnly: 0
     trackZOnly: 0
+    snapToPlayerXAxis: 0
     targetOffset: {x: 0, y: 0, z: 0}
     usePositionRefresh: 0
     positionRefreshInterval: 0
@@ -103,3 +114,12 @@ MonoBehaviour:
     projectileInterval: 0
     projectileSpeed: 0
     projectileLifeTime: 0
+    hitStunDuration: 0.15
+    hitStopDuration: 0
+    staggerValue: 10
+    isLauncher: 0
+    canBeParried: 1
+    isUnblockable: 0
+    allowMoveWhileAttacking: 0
+    forwardMoveOnly: 1
+    attackMoveSpeed: 2

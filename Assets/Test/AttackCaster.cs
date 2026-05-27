@@ -1,6 +1,8 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
+
 
 public class AttackCaster : MonoBehaviour
 {
@@ -21,6 +23,10 @@ public class AttackCaster : MonoBehaviour
     private bool isFixedAttack;
     private Vector3 fixedWorldPosition;
     private bool rangedHitConfirmed;
+
+    /// <summary>현재 공격에서 이미 타격한 콜라이더 (다중 히트 방지)</summary>
+    private readonly HashSet<Collider> hitTargetsThisAttack = new HashSet<Collider>();
+
 
     public void SetAttackData(ActionData data, bool isFixed = false, Vector3 fixedPos = default)
     {
@@ -44,6 +50,7 @@ public class AttackCaster : MonoBehaviour
     {
         if (currentAttackData == null) return;
         attackTriggerTime = Time.time;
+        hitTargetsThisAttack.Clear(); // 매 공격마다 리셋
 
         if (currentAttackData.actionType == ActionType.RangedAttack)
         {
@@ -79,48 +86,41 @@ public class AttackCaster : MonoBehaviour
         else if (currentAttackData.attackShape == AttackShape.Cylinder)
         {
             float offsetForCapsule = Mathf.Max(0, currentAttackData.attackHeight * 0.5f - currentAttackData.attackRadius);
-            Vector3 capTop = centerPoint + Vector3.up * offsetForCapsule;
+            Vector3 capTop    = centerPoint + Vector3.up * offsetForCapsule;
             Vector3 capBottom = centerPoint - Vector3.up * offsetForCapsule;
-
             hits = Physics.OverlapCapsule(capBottom, capTop, currentAttackData.attackRadius, targetLayer);
         }
 
-        if (hits.Length > 0)
-            OnHitConfirmed?.Invoke();
-
+        bool anyHit = false;
         foreach (Collider hitCol in hits)
         {
-            Debug.Log($"[{gameObject.name}]가 {hitCol.name} 타격 성공! (데미지: {currentAttackData.damage})");
+            // ── 다중 히트 방지 ──────────────────────────────────
+            if (hitTargetsThisAttack.Contains(hitCol)) continue;
+            hitTargetsThisAttack.Add(hitCol);
 
-            AnimationController targetAnimCtrl = hitCol.GetComponentInChildren<AnimationController>();
-            if (targetAnimCtrl != null)
+            // ── IHittable 인터페이스 호출 ──────────────────────
+            IHittable hittable = hitCol.GetComponentInParent<IHittable>();
+            if (hittable == null)
             {
-                targetAnimCtrl.Play("Hit"); 
-            }
-            else
-            {
-                Animator targetAnim = hitCol.GetComponentInChildren<Animator>();
-                if (targetAnim != null)
-                {
-                    targetAnim.Play("Hit");
-                }
+                // IHittable 미구현 오브젝트는 기존 방식으로 폴백 (하위호환)
+                Debug.Log($"[AttackCaster] {hitCol.name} 타격 (IHittable 미구현 — 폴백)");
+                continue;
             }
 
-            Rigidbody targetRb = hitCol.GetComponent<Rigidbody>();
-            if (targetRb != null)
+            Vector3 hitDir   = (hitCol.transform.position - transform.position).normalized;
+            Vector3 hitPoint = hitCol.ClosestPoint(transform.position);
+            CombatHitData hitData  = CombatHitData.Create(currentAttackData, hitPoint, hitDir, transform);
+
+            bool applied = hittable.OnHit(hitData);
+            if (applied)
             {
-                Vector3 knockbackDir = (hitCol.transform.position - transform.position).normalized;
-                
-                Vector3 finalKnockback = new Vector3(
-                    knockbackDir.x * currentAttackData.knockbackForce.x,
-                    currentAttackData.knockbackForce.y,
-                    knockbackDir.z * currentAttackData.knockbackForce.z
-                );
-                
-                targetRb.linearVelocity = Vector3.zero;
-                targetRb.AddForce(finalKnockback, ForceMode.Impulse);
+                anyHit = true;
+                CombatEventBus.Instance.RaiseHitDealt(hitData);
             }
         }
+
+        if (anyHit)
+            OnHitConfirmed?.Invoke();
     }
 
     private IEnumerator FireRangedProjectiles(ActionData data, bool fixedAttack, Vector3 fixedPos)
@@ -188,6 +188,9 @@ public class AttackCaster : MonoBehaviour
         if (currentAttackData != null)
         {
             if (currentAttackData.actionType == ActionType.RangedAttack) return;
+
+            // 플레이 중에 공격 판정 기즈모 지속 시간이 지나면 더 이상 그리지 않습니다.
+            if (Application.isPlaying && Time.time - attackTriggerTime > gizmoBlueDuration) return;
 
             Color gizmoColor = new Color(1f, 0f, 0f, 0.5f);
             if (Application.isPlaying && Time.time - attackTriggerTime <= gizmoBlueDuration)

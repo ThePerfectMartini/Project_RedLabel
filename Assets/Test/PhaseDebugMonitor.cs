@@ -40,6 +40,19 @@ public class PhaseDebugMonitor : MonoBehaviour
     // ── 스크롤 ──
     private Vector2 scrollPos;
 
+    // ── 전투 상호작용 컴포넌트 참조 (선택적) ──
+    private GroggyController groggyController;
+    private ParryController  parryController;
+    private DodgeController  dodgeController;
+    private PhaseManager     phaseManager;
+
+    // ── 전투 이벤트 카운터 ──
+    private int totalHits;
+    private int totalParries;
+    private int totalDodges;
+    private int totalGroggy;
+    private int totalCounters;
+
     private enum LogType { Hit, Select, Info }
 
     private struct LogEntry
@@ -51,8 +64,12 @@ public class PhaseDebugMonitor : MonoBehaviour
 
     private void Awake()
     {
-        attackCaster = GetComponent<AttackCaster>();
-        phaseRunner = GetComponent<PhaseRunner>();
+        attackCaster    = GetComponent<AttackCaster>();
+        phaseRunner     = GetComponent<PhaseRunner>();
+        groggyController = GetComponent<GroggyController>();
+        parryController  = GetComponent<ParryController>();
+        dodgeController  = GetComponent<DodgeController>();
+        phaseManager     = GetComponent<PhaseManager>();
     }
 
     private void OnEnable()
@@ -61,6 +78,12 @@ public class PhaseDebugMonitor : MonoBehaviour
             attackCaster.OnHitConfirmed += OnHitConfirmed;
         if (phaseRunner)
             phaseRunner.OnSequenceSelected += OnSequenceSelected;
+
+        CombatEventBus.Instance.OnHitDealt    += _ => totalHits++;
+        CombatEventBus.Instance.OnParrySuccess += _ => totalParries++;
+        CombatEventBus.Instance.OnDodgeSuccess += _ => totalDodges++;
+        CombatEventBus.Instance.OnGroggyEnter  += _ => totalGroggy++;
+        CombatEventBus.Instance.OnCounterHit   += _ => totalCounters++;
     }
 
     private void OnDisable()
@@ -313,6 +336,109 @@ public class PhaseDebugMonitor : MonoBehaviour
         }
 
         GUILayout.EndScrollView();
+        GUILayout.EndArea();
+
+        // ════════════════════════════════════════
+        // 왼쪽 패널: 전투 상호작용 실시간 상태
+        // ════════════════════════════════════════
+        DrawCombatStatePanel();
+    }
+
+    private void DrawCombatStatePanel()
+    {
+        float panelW = 260f;
+        GUILayout.BeginArea(new Rect(15f, 15f, panelW, 420f), boxStyle);
+
+        // ── 헤더 ──────────────────────────────
+        GUILayout.Label("⚔ 전투 상호작용 모니터", headerStyle);
+        GUILayout.Space(4);
+        DrawGUILine();
+        GUILayout.Space(4);
+
+        // ── 페이즈 정보 ───────────────────────
+        GUILayout.Label("📌 페이즈", headerStyle);
+        if (phaseManager != null)
+        {
+            int idx = phaseManager.CurrentPhaseIndex;
+            GUILayout.Label($"  현재 인덱스: <color=#FFD700>{idx}</color>", normalStyle);
+        }
+        else if (phaseRunner)
+        {
+            GUILayout.Label($"  마지막 선택: <color=#FFD700>{phaseRunner.LastSelectedIndex}</color>", normalStyle);
+        }
+        else
+        {
+            GUILayout.Label("  PhaseRunner 없음", normalStyle);
+        }
+        GUILayout.Space(6);
+
+        // ── 그로기 게이지 ──────────────────────
+        GUILayout.Label("💜 그로기 게이지", headerStyle);
+        if (groggyController != null)
+        {
+            float ratio = groggyController.GaugeRatio;
+            string state = groggyController.IsGroggy ? "<color=#FF44FF>그로기 중!</color>"
+                         : groggyController.IsImmune  ? "<color=#FFAA00>내성 중</color>"
+                         : "<color=#88FF88>일반</color>";
+
+            GUILayout.Label($"  상태: {state}", normalStyle);
+            GUILayout.Label($"  게이지: <color=#FF88FF>{ratio * 100f:F0}%</color>", normalStyle);
+            DrawProgressBar(ratio, $"그로기 게이지 {ratio * 100f:F0}%");
+        }
+        else
+        {
+            GUILayout.Label("  GroggyController 없음", normalStyle);
+        }
+        GUILayout.Space(6);
+
+        // ── 패링 상태 ──────────────────────────
+        GUILayout.Label("🛡 패링", headerStyle);
+        if (parryController != null)
+        {
+            string parryState = parryController.IsParrying   ? "<color=#00FFFF>패링 윈도우 열림!</color>"
+                              : parryController.IsOnCooldown ? "<color=#FFAA00>쿨다운</color>"
+                              : "<color=#AAAAAA>대기</color>";
+            GUILayout.Label($"  상태: {parryState}", normalStyle);
+        }
+        else
+        {
+            GUILayout.Label("  ParryController 없음", normalStyle);
+        }
+        GUILayout.Space(6);
+
+        // ── 회피 상태 ──────────────────────────
+        GUILayout.Label("💨 회피", headerStyle);
+        if (dodgeController != null)
+        {
+            string invStr = dodgeController.IsInvincible ? "<color=#00FF88>무적 프레임!</color>"
+                          : dodgeController.IsDodging    ? "<color=#FFFF00>회피 중</color>"
+                          : "<color=#AAAAAA>대기</color>";
+            GUILayout.Label($"  상태: {invStr}", normalStyle);
+        }
+        else
+        {
+            GUILayout.Label("  DodgeController 없음", normalStyle);
+        }
+        GUILayout.Space(6);
+
+        // ── 이벤트 카운터 ──────────────────────
+        DrawGUILine();
+        GUILayout.Space(4);
+        GUILayout.Label("📈 이벤트 누계", headerStyle);
+        GUILayout.Label($"  타격: <color=#88FF88>{totalHits}</color>회", normalStyle);
+        GUILayout.Label($"  패링: <color=#00FFFF>{totalParries}</color>회", normalStyle);
+        GUILayout.Label($"  회피: <color=#FFFF88>{totalDodges}</color>회", normalStyle);
+        GUILayout.Label($"  그로기 진입: <color=#FF88FF>{totalGroggy}</color>회", normalStyle);
+        GUILayout.Label($"  카운터 히트: <color=#FF4444>{totalCounters}</color>회", normalStyle);
+
+        // ── 히트스톱 상태 ──────────────────────
+        GUILayout.Space(4);
+        DrawGUILine();
+        GUILayout.Space(4);
+        float ts = Time.timeScale;
+        string tsColor = ts < 0.5f ? "#FF4444" : ts < 0.9f ? "#FFAA00" : "#88FF88";
+        GUILayout.Label($"⏱ TimeScale: <color={tsColor}>{ts:F3}</color>", normalStyle);
+
         GUILayout.EndArea();
     }
 

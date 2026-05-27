@@ -1,0 +1,82 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 862587ca3bdf47cbbc0bc89990afa31f, type: 3}
+  m_Name: Attack_player 1
+  m_EditorClassIdentifier: Assembly-CSharp::ActionSequenceSO
+  actions:
+  - showGizmo: 0
+    actionType: 2
+    executeParallel: 0
+    playAnimation: 1
+    animationName: Attack 2
+    targetType: 0
+    targetPosition: {x: 0, y: 0, z: 0}
+    targetTag: 
+    isTeleport: 0
+    moveDirection8: 0
+    useJump: 0
+    jumpForce: 0
+    trackXOnly: 0
+    trackZOnly: 0
+    snapToPlayerXAxis: 0
+    targetOffset: {x: 0, y: 0, z: 0}
+    usePositionRefresh: 0
+    positionRefreshInterval: 0
+    repeatRefreshUntilReached: 0
+    refreshRepeatCount: 0
+    startSpeed: 0
+    speed: 0.01
+    useAcceleration: 0
+    acceleration: 0.01
+    stopOnDestinationReached: 0
+    destinationStopDistance: 0
+    stopOnTargetDetected: 0
+    detectOrigin: 0
+    detectShape: 0
+    detectOffset: {x: 0, y: 0, z: 0}
+    detectRadius: 0
+    detectBoxSize: {x: 0, y: 0, z: 0}
+    stopOnTimeLimit: 0
+    timeLimit: 0
+    damage: 8
+    knockbackForce: {x: 5, y: 0, z: 0}
+    attackShape: 1
+    attackRadius: 0
+    attackHeight: 0
+    attackHitBoxSize: {x: 4, y: 4, z: 1}
+    attackOffset: {x: -1, y: 1, z: 0}
+    projectilePrefab: {fileID: 0}
+    projectileCount: 1
+    projectileInterval: 0
+    projectileSpeed: 0
+    projectileLifeTime: 0
+    hitStunDuration: 0
+    hitStopDuration: 0
+    staggerValue: 0
+    isLauncher: 0
+    canBeParried: 0
+    isUnblockable: 0
+    allowMoveWhileAttacking: 0
+    forwardMoveOnly: 0
+    attackMoveSpeed: 3
+    enableDynamicMovement: 1
+    autoMoveSpeed: 0
+    startMoveSpeed: 0
+    lockAutoMove: 0
+    brakeOnOppositeInput: 0
+    accelerateOnForwardInput: 0
+    forwardAccelerationSpeed: 2
+    castDamageOnStart: 1
+    useJumpInAttack: 0
+    attackJumpForce: 5
+    useLerpMovement: 1
+    movementLerpSpeed: 10

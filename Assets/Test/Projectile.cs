@@ -32,41 +32,36 @@ public class Projectile : MonoBehaviour
 
     private void OnTriggerEnter(Collider other)
     {
-        // ▼ 버그 수정 1: 발사자 본인 또는 발사자의 자식 오브젝트(무기 등)에 맞고 증발하는 현상 방지
+        // 발사자 본인 또는 자식 오브젝트에 맞고 증발하는 현상 방지
         if (attacker != null)
         {
             if (other.gameObject == attacker || other.transform.IsChildOf(attacker.transform)) return;
         }
 
-        if (((1 << other.gameObject.layer) & targetLayer) != 0)
+        if (((1 << other.gameObject.layer) & targetLayer) == 0) return;
+
+        // ── IHittable 인터페이스 호출 ──────────────────────────
+        IHittable hittable = other.GetComponentInParent<IHittable>();
+        if (hittable != null)
         {
-            Debug.Log($"[Projectile] {other.name} 명중! (데미지: {data.damage})");
+            Vector3 hitDir   = (other.transform.position - transform.position).normalized;
+            Vector3 hitPoint = other.ClosestPoint(transform.position);
+            CombatHitData hitData  = CombatHitData.Create(data, hitPoint, hitDir, transform);
 
-            AnimationController targetAnimCtrl = other.GetComponentInChildren<AnimationController>();
-            if (targetAnimCtrl != null) targetAnimCtrl.Play("Hit");
-            else
+            bool applied = hittable.OnHit(hitData);
+            if (applied)
             {
-                Animator targetAnim = other.GetComponentInChildren<Animator>();
-                if (targetAnim != null) targetAnim.Play("Hit");
+                CombatEventBus.Instance.RaiseHitDealt(hitData);
+                if (attackCaster) attackCaster.NotifyRangedHit();
             }
-
-            Rigidbody targetRb = other.GetComponent<Rigidbody>();
-            if (targetRb != null)
-            {
-                Vector3 knockbackDir = (other.transform.position - transform.position).normalized;
-                Vector3 finalKnockback = new Vector3(
-                    knockbackDir.x * data.knockbackForce.x,
-                    data.knockbackForce.y,
-                    knockbackDir.z * data.knockbackForce.z
-                );
-
-                targetRb.linearVelocity = Vector3.zero;
-                targetRb.AddForce(finalKnockback, ForceMode.Impulse);
-            }
-
-            Destroy(gameObject);
-
+        }
+        else
+        {
+            // IHittable 미구현 — 폴백 로그
+            Debug.Log($"[Projectile] {other.name} 명중 (IHittable 미구현 — 폴백)");
             if (attackCaster) attackCaster.NotifyRangedHit();
         }
+
+        Destroy(gameObject);
     }
 }

@@ -11,6 +11,10 @@ public class CapsuleController : MonoBehaviour
     private Rigidbody rb;
     private Collider col;
 
+    // ── 수동 이동(코루틴에 의한 위치 이동) 진행 상태 트래킹 ──
+    private bool isManualMoving;
+    public bool IsManualMoving => isManualMoving;
+
     private void Awake()
     {
         rb = GetComponent<Rigidbody>();
@@ -44,6 +48,8 @@ public class CapsuleController : MonoBehaviour
             case MoveDirection8.UpRight: return new Vector3(1, 0, 1).normalized;
             case MoveDirection8.DownLeft: return new Vector3(-1, 0, -1).normalized;
             case MoveDirection8.DownRight: return new Vector3(1, 0, -1).normalized;
+            case MoveDirection8.Forward: return Vector3.left; // 2.5D 벨트스크롤 물리 기준 캐릭터의 앞 방향
+            case MoveDirection8.Backward: return Vector3.right; // 2.5D 벨트스크롤 물리 기준 캐릭터의 뒤 방향
             default: return Vector3.zero;
         }
     }
@@ -68,37 +74,48 @@ public class CapsuleController : MonoBehaviour
         return snappedDir.normalized;
     }
 
-    public IEnumerator MoveInDirection(Vector3 direction, float startSpeed, float maxSpeed, bool isAccelerated, float accel, bool checkTime, float timeLimit)
+    public IEnumerator MoveInDirection(Vector3 direction, float startSpeed, float maxSpeed, bool isAccelerated, float accel, bool checkTime, float timeLimit,
+                                        InterruptToken token = null)
     {
-        maxSpeed = Mathf.Max(0.01f, maxSpeed);
-        startSpeed = Mathf.Max(0f, startSpeed);
-        if (isAccelerated) accel = Mathf.Max(0.01f, accel);
-
-        float currentSpeed = isAccelerated ? startSpeed : maxSpeed;
-        float timer = 0f;
-        
-        Vector3 normalizedDir = Get8Direction(direction.normalized);
-        UpdateFacingDirection(normalizedDir.x);
-
-        while (true)
+        isManualMoving = true;
+        try
         {
-            if (checkTime)
-            {
-                timer += Time.fixedDeltaTime; 
-                if (timer >= timeLimit) yield break;
-            }
+            maxSpeed = Mathf.Max(0.01f, maxSpeed);
+            startSpeed = Mathf.Max(0f, startSpeed);
+            if (isAccelerated) accel = Mathf.Max(0.01f, accel);
 
-            if (isAccelerated)
-            {
-                currentSpeed = Mathf.MoveTowards(currentSpeed, maxSpeed, accel * Time.fixedDeltaTime);
-            }
-
-            Vector3 nextPos = rb.position + (normalizedDir * currentSpeed * Time.fixedDeltaTime);
-            // 방향 이동에서도 y축은 변하지 않도록 고정
-            nextPos.y = rb.position.y;
-            rb.MovePosition(nextPos);
+            float currentSpeed = isAccelerated ? startSpeed : maxSpeed;
+            float timer = 0f;
             
-            yield return new WaitForFixedUpdate();
+            Vector3 normalizedDir = Get8Direction(direction.normalized);
+            UpdateFacingDirection(normalizedDir.x);
+
+            while (true)
+            {
+                if (token != null && token.IsInterrupted) yield break;
+
+                if (checkTime)
+                {
+                    timer += Time.fixedDeltaTime; 
+                    if (timer >= timeLimit) yield break;
+                }
+
+                if (isAccelerated)
+                {
+                    currentSpeed = Mathf.MoveTowards(currentSpeed, maxSpeed, accel * Time.fixedDeltaTime);
+                }
+
+                Vector3 nextPos = rb.position + (normalizedDir * currentSpeed * Time.fixedDeltaTime);
+                // 방향 이동에서도 y축은 변하지 않도록 고정
+                nextPos.y = rb.position.y;
+                rb.MovePosition(nextPos);
+                
+                yield return new WaitForFixedUpdate();
+            }
+        }
+        finally
+        {
+            isManualMoving = false;
         }
     }
 
@@ -114,107 +131,118 @@ public class CapsuleController : MonoBehaviour
         );
     }
 
-    public IEnumerator MoveToTarget(Transform trackingTarget, Vector3 specificTargetPos, bool isTracking, ActionData actionData)
+    public IEnumerator MoveToTarget(Transform trackingTarget, Vector3 specificTargetPos, bool isTracking, ActionData actionData,
+                                     InterruptToken token = null)
     {
-        float maxSpeed = Mathf.Max(0.01f, actionData.speed);
-        float startSpeed = Mathf.Max(0f, actionData.startSpeed);
-        float accel = actionData.useAcceleration ? Mathf.Max(0.01f, actionData.acceleration) : 0f;
-
-        float currentSpeed = actionData.useAcceleration ? startSpeed : maxSpeed;
-        float totalTimer = 0f;
-        float refreshTimer = 0f;
-        int refreshCount = 0;
-
-        bool checkDest = actionData.stopOnDestinationReached;
-        bool checkDetect = actionData.stopOnTargetDetected && isTracking;
-        bool checkTime = actionData.stopOnTimeLimit;
-
-        bool canRefresh = actionData.usePositionRefresh;
-
-        while (true)
+        isManualMoving = true;
+        try
         {
-            Vector3 baseTargetPos = specificTargetPos;
-            if (isTracking)
+            float maxSpeed = Mathf.Max(0.01f, actionData.speed);
+            float startSpeed = Mathf.Max(0f, actionData.startSpeed);
+            float accel = actionData.useAcceleration ? Mathf.Max(0.01f, actionData.acceleration) : 0f;
+
+            float currentSpeed = actionData.useAcceleration ? startSpeed : maxSpeed;
+            float totalTimer = 0f;
+            float refreshTimer = 0f;
+            int refreshCount = 0;
+
+            bool checkDest = actionData.stopOnDestinationReached;
+            bool checkDetect = actionData.stopOnTargetDetected && isTracking;
+            bool checkTime = actionData.stopOnTimeLimit;
+
+            bool canRefresh = actionData.usePositionRefresh;
+
+            while (true)
             {
-                if (trackingTarget == null) yield break; 
-                baseTargetPos = trackingTarget.position;
-            }
-
-            if (actionData.trackXOnly && !actionData.trackZOnly) baseTargetPos.z = rb.position.z;
-            else if (!actionData.trackXOnly && actionData.trackZOnly) baseTargetPos.x = rb.position.x;
-
-            baseTargetPos.y = 0f;
-
-            Vector3 offsetTargetPos = GetOffsetPosition(rb.position, baseTargetPos, actionData.targetOffset);
-
-            bool needsRefresh = false;
-            while (!needsRefresh)
-            {
-                if (checkTime)
+                Vector3 baseTargetPos = specificTargetPos;
+                if (isTracking)
                 {
-                    totalTimer += Time.fixedDeltaTime;
-                    if (totalTimer >= actionData.timeLimit) yield break;
+                    if (trackingTarget == null) yield break; 
+                    baseTargetPos = trackingTarget.position;
                 }
 
-                // 종료 조건 1: 목표 좌표 도달 검사 (절대 좌표 기준)
-                if (checkDest && CheckDestinationReached(offsetTargetPos, actionData.destinationStopDistance))
-                    yield break;
+                if (actionData.trackXOnly && !actionData.trackZOnly) baseTargetPos.z = rb.position.z;
+                else if (!actionData.trackXOnly && actionData.trackZOnly) baseTargetPos.x = rb.position.x;
 
-                // 종료 조건 2: 이동 중 타겟 감지 검사 (추적 모드에서만)
-                if (checkDetect && trackingTarget != null && CheckTargetInDetectRange(trackingTarget.position, actionData))
-                    yield break;
+                baseTargetPos.y = 0f;
 
-                Vector3 destination = offsetTargetPos;
+                Vector3 offsetTargetPos = GetOffsetPosition(rb.position, baseTargetPos, actionData.targetOffset);
 
-                Vector3 dirToDest = destination - rb.position;
-                dirToDest.y = 0f; 
-                float distToDest = dirToDest.magnitude;
-
-                Vector3 moveDir = Get8Direction(dirToDest);
-                UpdateFacingDirection(moveDir.x);
-
-                if (actionData.useAcceleration)
+                bool needsRefresh = false;
+                while (!needsRefresh)
                 {
-                    currentSpeed = Mathf.MoveTowards(currentSpeed, maxSpeed, accel * Time.fixedDeltaTime);
-                }
+                    if (token != null && token.IsInterrupted) yield break;
 
-                float moveStep = currentSpeed * Time.fixedDeltaTime;
-                Vector3 nextPos;
-
-                if (distToDest <= moveStep)
-                {
-                    nextPos = rb.position + dirToDest;
-                }
-                else
-                {
-                    nextPos = rb.position + (moveDir * moveStep);
-                }
-
-                rb.MovePosition(nextPos);
-                
-                yield return new WaitForFixedUpdate();
-
-                if (canRefresh)
-                {
-                    refreshTimer += Time.fixedDeltaTime;
-                    if (refreshTimer >= actionData.positionRefreshInterval)
+                    if (checkTime)
                     {
-                        refreshTimer = 0f;
-                        refreshCount++;
-                        if (!actionData.repeatRefreshUntilReached && refreshCount >= actionData.refreshRepeatCount)
+                        totalTimer += Time.fixedDeltaTime;
+                        if (totalTimer >= actionData.timeLimit) yield break;
+                    }
+
+                    // 종료 조건 1: 목표 좌표 도달 검사 (절대 좌표 기준)
+                    if (checkDest && CheckDestinationReached(offsetTargetPos, actionData.destinationStopDistance))
+                        yield break;
+
+                    // 종료 조건 2: 이동 중 타겟 감지 검사 (추적 모드에서만)
+                    if (checkDetect && trackingTarget != null && CheckTargetInDetectRange(trackingTarget.position, actionData))
+                        yield break;
+
+                    Vector3 destination = offsetTargetPos;
+
+                    Vector3 dirToDest = destination - rb.position;
+                    dirToDest.y = 0f; 
+                    float distToDest = dirToDest.magnitude;
+
+                    Vector3 moveDir = Get8Direction(dirToDest);
+                    UpdateFacingDirection(moveDir.x);
+
+                    if (actionData.useAcceleration)
+                    {
+                        currentSpeed = Mathf.MoveTowards(currentSpeed, maxSpeed, accel * Time.fixedDeltaTime);
+                    }
+
+                    float moveStep = currentSpeed * Time.fixedDeltaTime;
+                    Vector3 nextPos;
+
+                    if (distToDest <= moveStep)
+                    {
+                        nextPos = rb.position + dirToDest;
+                    }
+                    else
+                    {
+                        nextPos = rb.position + (moveDir * moveStep);
+                    }
+
+                    rb.MovePosition(nextPos);
+                    
+                    yield return new WaitForFixedUpdate();
+
+                    if (canRefresh)
+                    {
+                        refreshTimer += Time.fixedDeltaTime;
+                        if (refreshTimer >= actionData.positionRefreshInterval)
                         {
-                            canRefresh = false; 
+                            refreshTimer = 0f;
+                            refreshCount++;
+                            if (!actionData.repeatRefreshUntilReached && refreshCount >= actionData.refreshRepeatCount)
+                            {
+                                canRefresh = false; 
+                            }
+                            needsRefresh = true; 
                         }
-                        needsRefresh = true; 
+                    }
+                    else if (isTracking && !actionData.usePositionRefresh)
+                    {
+                        // 동적 새로고침 미사용 시에만 매 프레임 추적 갱신
+                        // 동적 새로고침 사용 시 횟수 소진 후에는 마지막 좌표에 고정
+                        needsRefresh = true;
                     }
                 }
-                else if (isTracking && !actionData.usePositionRefresh)
-                {
-                    // 동적 새로고침 미사용 시에만 매 프레임 추적 갱신
-                    // 동적 새로고침 사용 시 횟수 소진 후에는 마지막 좌표에 고정
-                    needsRefresh = true;
-                }
             }
+        }
+        finally
+        {
+            isManualMoving = false;
         }
     }
 

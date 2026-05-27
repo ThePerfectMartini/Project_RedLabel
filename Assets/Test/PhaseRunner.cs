@@ -38,17 +38,23 @@ public class PhaseRunner : MonoBehaviour
     public int LastSelectedIndex => lastSelectedIndex;
     private bool isRunning;
 
+    // ── 중단 토큰 ──
+    private InterruptToken currentToken;
+
+    // ── 타겟 캐싱 ──
+    private Transform cachedTarget;
+
     /// <summary>
     /// 패턴이 선택될 때마다 발행되는 이벤트 (디버그 모니터 연동용)
     /// </summary>
     public event Action<PhaseSelectionInfo> OnSequenceSelected;
     
     // ── 콤보 판정용 ──
-    // AttackCaster의 타격 성공 이벤트를 구독하여 이 플래그를 세팅
     private bool hitConfirmed;
 
     // AttackCaster 참조 (캐싱)
     private AttackCaster attackCaster;
+
 
     private void Awake()
     {
@@ -60,8 +66,18 @@ public class PhaseRunner : MonoBehaviour
 
     private void Start()
     {
-        if (playOnStart && phase)
+        CacheTarget();
+        // ── PhaseManager가 부착되어 있다면 매니저가 주도권을 갖고 첫 페이즈를 기동하므로 이중 시작을 억제합니다. ──
+        if (playOnStart && phase && !GetComponent<PhaseManager>())
             StartPhase();
+    }
+
+    // ── 타겟 캐싱 ──
+    private void CacheTarget()
+    {
+        if (!phase || string.IsNullOrEmpty(phase.targetTag)) return;
+        GameObject targetObj = GameObject.FindWithTag(phase.targetTag);
+        if (targetObj) cachedTarget = targetObj.transform;
     }
 
     private void OnEnable()
@@ -86,7 +102,27 @@ public class PhaseRunner : MonoBehaviour
     public void StopPhase()
     {
         isRunning = false;
+        currentToken?.Interrupt(InterruptReason.External);
         StopAllCoroutines();
+    }
+
+    /// <summary>
+    /// 현재 실행 중인 시퀀스를 안전하게 중단합니다.
+    /// 그로기 진입 / 페이즈 전환 시 외부에서 호출하세요.
+    /// </summary>
+    public void InterruptCurrentSequence(InterruptReason reason = InterruptReason.External)
+    {
+        currentToken?.Interrupt(reason);
+    }
+
+    /// <summary>
+    /// 런타임에서 페이즈 SO를 교체합니다 (PhaseManager 연동용).
+    /// </summary>
+    public void SetPhase(PhaseSO newPhase)
+    {
+        phase = newPhase;
+        lastSelectedIndex = -1;
+        CacheTarget();
     }
 
     // ── 타격 성공 콜백 ──
@@ -244,12 +280,19 @@ public class PhaseRunner : MonoBehaviour
     {
         if (!sequence || !controller) yield break;
 
+        // 매 시퀀스마다 새 토큰 생성
+        currentToken = new InterruptToken();
+
+        var parallelCoroutines = new System.Collections.Generic.List<Coroutine>();
+
         foreach (var action in sequence.actions)
         {
-            ActionState state = CreateState(action);
+            if (currentToken.IsInterrupted) yield break;
+
+            ActionState state = CreateState(action, currentToken);
             if (state == null) continue;
 
-            // 공격 액션이면 hitConfirmed를 리셋해서 이번 공격의 성공 여부를 측정
+            // 공격 액션이면 hitConfirmed 리셋
             bool isAttackAction = action.actionType == ActionType.VariableAttack
                 || action.actionType == ActionType.FixedAttack
                 || action.actionType == ActionType.RangedAttack;
@@ -259,24 +302,31 @@ public class PhaseRunner : MonoBehaviour
 
             if (action.executeParallel)
             {
-                controller.StartCoroutine(state.Execute());
+                Coroutine c = controller.StartCoroutine(state.Execute());
+                parallelCoroutines.Add(c);
             }
             else
             {
                 yield return controller.StartCoroutine(state.Execute());
             }
         }
+
+        // 병렬 실행 코루틴 완료 대기
+        foreach (var c in parallelCoroutines)
+        {
+            if (c != null) yield return c;
+        }
     }
 
-    private ActionState CreateState(ActionData action)
+    private ActionState CreateState(ActionData action, InterruptToken token)
     {
         switch (action.actionType)
         {
-            case ActionType.Move: return new MoveState(controller, action);
-            case ActionType.Wait: return new WaitState(controller, action);
+            case ActionType.Move:          return new MoveState(controller, action, token, cachedTarget);
+            case ActionType.Wait:          return new WaitState(controller, action, token, cachedTarget);
             case ActionType.VariableAttack:
-            case ActionType.FixedAttack: return new AttackState(controller, action);
-            case ActionType.RangedAttack: return new RangedAttackState(controller, action);
+            case ActionType.FixedAttack:   return new AttackState(controller, action, token, cachedTarget);
+            case ActionType.RangedAttack:  return new RangedAttackState(controller, action, token, cachedTarget);
             default: return null;
         }
     }
@@ -286,12 +336,16 @@ public class PhaseRunner : MonoBehaviour
     // ═══════════════════════════════════════════════════════════
     private Vector3 GetRelativePositionToPlayer()
     {
-        if (string.IsNullOrEmpty(phase.targetTag)) return Vector3.zero;
+        if (!phase || string.IsNullOrEmpty(phase.targetTag)) return Vector3.zero;
 
-        GameObject playerObj = GameObject.FindWithTag(phase.targetTag);
-        if (!playerObj) return Vector3.zero;
+        // 캐싱된 타겟 우선 사용 → FindWithTag 주기 최소화
+        if (!cachedTarget)
+        {
+            CacheTarget();
+            if (!cachedTarget) return Vector3.zero;
+        }
 
-        Vector3 diff = playerObj.transform.position - transform.position;
+        Vector3 diff = cachedTarget.position - transform.position;
         diff.y = 0f;
         return diff;
     }

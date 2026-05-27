@@ -3,7 +3,7 @@ using UnityEngine;
 
 public enum ActionType { Move, Wait, VariableAttack, FixedAttack, RangedAttack }
 public enum TargetType { SpecificPosition, TrackObject, Direction }
-public enum MoveDirection8 { None, Up, Down, Left, Right, UpLeft, UpRight, DownLeft, DownRight }
+public enum MoveDirection8 { None, Up, Down, Left, Right, UpLeft, UpRight, DownLeft, DownRight, Forward, Backward }
 
 public enum DetectOrigin { Self, Target }
 public enum DetectShape { Sphere, Box }
@@ -78,6 +78,67 @@ public class ActionData
     public float projectileInterval = 0.1f;
     public float projectileSpeed = 15f;
     public float projectileLifeTime = 3f;
+
+    // ── 전투 확장 필드 (CombatHitData.Create()와 연동) ────────────────
+    [Header("타격 연출 · 상호작용")]
+    [Tooltip("피격 경직 시간(초). 이 값만큼 피격자의 시퀀스 진행이 멈춥니다.")]
+    public float hitStunDuration = 0.15f;
+    [Tooltip("히트스톱 시간(초). 0이면 기본값을 사용합니다.")]
+    public float hitStopDuration = 0f;
+    [Tooltip("그로기 게이지 축적량. 높을수록 적이 빠르게 그로기 상태가 됩니다.")]
+    public float staggerValue = 10f;
+    [Tooltip("에어 런처 여부. true면 피격체를 공중으로 띄웁니다.")]
+    public bool isLauncher = false;
+    [Tooltip("패링(저스트 가드) 가능 여부. false면 패링으로 막을 수 없습니다.")]
+    public bool canBeParried = true;
+    [Tooltip("가드 불능 여부. true면 가드/패링 모두 뚫고 피해를 줍니다.")]
+    public bool isUnblockable = false;
+
+    [Header("공격 중 이동 설정")]
+    [Tooltip("공격 동작 중에도 캐릭터가 이동할 수 있도록 허용합니다. 기본값은 차단입니다.")]
+    public bool allowMoveWhileAttacking = false;
+    [Tooltip("true면 현재 바라보는 방향(앞)으로 이동 입력이 있을 때만 전진합니다. false면 전 방향 이동을 허용합니다.")]
+    public bool forwardMoveOnly = true;
+    [Tooltip("공격 중 이동 속도. 일반 이동 속도보다 낮게 설정하는 것을 권장합니다.")]
+    public float attackMoveSpeed = 2f;
+
+    [Header("공격 중 동적 이동 제어")]
+    [Tooltip("공격 시 몬스터/플레이어가 기본 제공하는 자동 이동 및 관성 물리를 적용할지 여부")]
+    public bool enableDynamicMovement = false;
+
+    [Tooltip("공격 시 입력이 없어도 기본적으로 이동하는 자동 속도 (양수 = 전진, 음수 = 후진, 최종 속도)")]
+    public float autoMoveSpeed = 0f;
+
+    [Tooltip("공격 시작 시점의 초기 이동 속도. 가감속 Lerp 사용 시에만 유효합니다.")]
+    public float startMoveSpeed = 0f;
+
+
+
+    [Tooltip("반대 방향 입력 시 제동 여부. true이면 플레이어가 반대(뒤) 방향 입력을 주면 속도가 감속됩니다.")]
+    public bool brakeOnOppositeInput = false;
+    [Tooltip("반대 방향 입력 시 제동할(감속할) 속도 값.")]
+    public float oppositeBrakeSpeed = 2f;
+
+    [Tooltip("순방향 입력 시 가속 여부. true이면 플레이어가 진행 방향(앞) 입력을 주면 속도가 추가로 빨라집니다.")]
+    public bool accelerateOnForwardInput = false;
+
+    [Tooltip("순방향 입력 시 증가할 속도 값.")]
+    public float forwardAccelerationSpeed = 2f;
+
+    [Header("공격 중 물리 및 연출 제어")]
+    [Tooltip("시작 시 즉시 타격 판정을 수행할지 여부. 애니메이션 이벤트(OnAttackImpact)로 데미지를 가하고 싶다면 이를 비활성화(false) 하십시오.")]
+    public bool castDamageOnStart = true;
+
+    [Tooltip("공격과 동시에 물리적 점프(도약)를 적용합니다. (예: 승룡권, 도약 베기 등)")]
+    public bool useJumpInAttack = false;
+
+    [Tooltip("공격 중 도약할 점프 힘(도약 높이)")]
+    public float attackJumpForce = 5f;
+
+    [Tooltip("공격 중 속도 변화 시 부드러운 가감속(Lerp 보간)을 적용할지 여부")]
+    public bool useLerpMovement = false;
+
+
 }
 
 [CreateAssetMenu(fileName = "NewActionSequence", menuName = "Action Sequence")]
@@ -321,6 +382,59 @@ public class ActionDataDrawer : UnityEditor.PropertyDrawer
                 DrawProperty(ref rect, property, "knockbackForce", "넉백 힘 (X, Y, Z)");
                 DrawProperty(ref rect, property, "attackOffset", "공격/생성 오프셋");
                 
+                // ── 추가된 부분: 전투 상호작용 피처 노출 ──
+                DrawHeader(ref rect, "▶ 전투 상호작용 설정");
+                DrawProperty(ref rect, property, "hitStunDuration", "피격 경직 시간(초)");
+                DrawProperty(ref rect, property, "hitStopDuration", "히트스톱 시간(초)");
+                DrawProperty(ref rect, property, "staggerValue", "그로기 게이지 축적량");
+                DrawProperty(ref rect, property, "isLauncher", "에어 런처 여부 (공중 띄우기)");
+                DrawProperty(ref rect, property, "canBeParried", "패링 가능 여부");
+                DrawProperty(ref rect, property, "isUnblockable", "가드 불가 여부");
+
+                DrawHeader(ref rect, "▶ 공격 중 이동 & 물리 제어 (통합)");
+                
+                // 1. 수동 조작 이동
+                DrawProperty(ref rect, property, "allowMoveWhileAttacking", "수동 조작 이동 허용");
+                if (property.FindPropertyRelative("allowMoveWhileAttacking").boolValue)
+                {
+                    DrawProperty(ref rect, property, "forwardMoveOnly", " └ 앞 방향으로만 제한");
+                    DrawProperty(ref rect, property, "attackMoveSpeed", " └ 조작 이동 속도");
+                }
+
+                // 2. 자동 이동/돌진 (동적 이동 제어)
+                DrawProperty(ref rect, property, "enableDynamicMovement", "동적 이동 제어 허용");
+                if (property.FindPropertyRelative("enableDynamicMovement").boolValue)
+                {
+                    DrawProperty(ref rect, property, "autoMoveSpeed", " └ 자동 이동 속도 (최종)");
+                    DrawProperty(ref rect, property, "brakeOnOppositeInput", " └ 반대 방향 입력 시 제동");
+                    if (property.FindPropertyRelative("brakeOnOppositeInput").boolValue)
+                    {
+                        DrawProperty(ref rect, property, "oppositeBrakeSpeed", "    └ 제동 속도 수치");
+                    }
+                    DrawProperty(ref rect, property, "accelerateOnForwardInput", " └ 순방향 입력 시 가속");
+                    if (property.FindPropertyRelative("accelerateOnForwardInput").boolValue)
+                    {
+                        DrawProperty(ref rect, property, "forwardAccelerationSpeed", "    └ 추가 가속 속도");
+                    }
+
+                    // 4. 가감속 Lerp 보간 설정 (동적 이동 하위로 이동)
+                    DrawProperty(ref rect, property, "useLerpMovement", " └ 가감속 부드럽게 (Lerp)");
+                    if (property.FindPropertyRelative("useLerpMovement").boolValue)
+                    {
+                        DrawProperty(ref rect, property, "startMoveSpeed", "    └ 출발 이동 속도");
+                    }
+                }
+
+                // 3. 점프/도약 설정
+                DrawProperty(ref rect, property, "useJumpInAttack", "공격 시 점프(도약) 사용");
+                if (property.FindPropertyRelative("useJumpInAttack").boolValue)
+                {
+                    DrawProperty(ref rect, property, "attackJumpForce", " └ 점프 힘 (도약 높이)");
+                }
+
+                // 5. 타격 이벤트 개시 시점 제어 (이중 판정 방지)
+                DrawProperty(ref rect, property, "castDamageOnStart", "공격 시작 시 즉시 타격 판정");
+
                 if (actionType == ActionType.RangedAttack)
                 {
                     DrawHeader(ref rect, "▶ 투사체 설정");
@@ -545,6 +659,43 @@ public class ActionDataDrawer : UnityEditor.PropertyDrawer
             }
 
             height += AddPropsCount(property, "damage", "knockbackForce", "attackOffset");
+            
+            // ── 추가된 부분: 높이 계산 추가 ──
+            height += headerHeight;
+            height += AddPropsCount(property, "hitStunDuration", "hitStopDuration", "staggerValue", "isLauncher", "canBeParried", "isUnblockable");
+
+            height += headerHeight; // ▶ 공격 중 이동 & 물리 제어 (통합)
+            
+            // 1. 수동 조작 이동
+            height += AddProp(property, "allowMoveWhileAttacking");
+            if (property.FindPropertyRelative("allowMoveWhileAttacking").boolValue)
+                height += AddPropsCount(property, "forwardMoveOnly", "attackMoveSpeed");
+
+            // 2. 자동 이동/돌진 (동적 이동 제어)
+            height += AddProp(property, "enableDynamicMovement");
+            if (property.FindPropertyRelative("enableDynamicMovement").boolValue)
+            {
+                height += AddPropsCount(property, "autoMoveSpeed", "brakeOnOppositeInput");
+                if (property.FindPropertyRelative("brakeOnOppositeInput").boolValue)
+                    height += AddProp(property, "oppositeBrakeSpeed");
+
+                height += AddProp(property, "accelerateOnForwardInput");
+                if (property.FindPropertyRelative("accelerateOnForwardInput").boolValue)
+                    height += AddProp(property, "forwardAccelerationSpeed");
+
+                // 4. 가감속 Lerp 설정
+                height += AddProp(property, "useLerpMovement");
+                if (property.FindPropertyRelative("useLerpMovement").boolValue)
+                    height += AddProp(property, "startMoveSpeed");
+            }
+
+            // 3. 점프/도약 설정
+            height += AddProp(property, "useJumpInAttack");
+            if (property.FindPropertyRelative("useJumpInAttack").boolValue)
+                height += AddProp(property, "attackJumpForce");
+
+            // 5. 타격 개시 제어
+            height += AddProp(property, "castDamageOnStart");
             
             if (actionType == ActionType.RangedAttack)
             {
