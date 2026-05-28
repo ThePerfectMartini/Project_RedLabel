@@ -68,6 +68,17 @@ MonoBehaviour:
     allowMoveWhileAttacking: 0
     forwardMoveOnly: 1
     attackMoveSpeed: 2
+    enableDynamicMovement: 0
+    autoMoveSpeed: 0
+    startMoveSpeed: 0
+    brakeOnOppositeInput: 0
+    oppositeBrakeSpeed: 2
+    accelerateOnForwardInput: 0
+    forwardAccelerationSpeed: 2
+    castDamageOnStart: 1
+    useJumpInAttack: 0
+    attackJumpForce: 5
+    useLerpMovement: 0
   - showGizmo: 0
     actionType: 2
     executeParallel: 0
@@ -123,6 +134,17 @@ MonoBehaviour:
     allowMoveWhileAttacking: 0
     forwardMoveOnly: 1
     attackMoveSpeed: 2
+    enableDynamicMovement: 0
+    autoMoveSpeed: 0
+    startMoveSpeed: 0
+    brakeOnOppositeInput: 0
+    oppositeBrakeSpeed: 2
+    accelerateOnForwardInput: 0
+    forwardAccelerationSpeed: 2
+    castDamageOnStart: 0
+    useJumpInAttack: 0
+    attackJumpForce: 5
+    useLerpMovement: 0
   - showGizmo: 0
     actionType: 1
     executeParallel: 0
@@ -178,3 +200,14 @@ MonoBehaviour:
     allowMoveWhileAttacking: 0
     forwardMoveOnly: 1
     attackMoveSpeed: 2
+    enableDynamicMovement: 0
+    autoMoveSpeed: 0
+    startMoveSpeed: 0
+    brakeOnOppositeInput: 0
+    oppositeBrakeSpeed: 2
+    accelerateOnForwardInput: 0
+    forwardAccelerationSpeed: 2
+    castDamageOnStart: 1
+    useJumpInAttack: 0
+    attackJumpForce: 5
+    useLerpMovement: 0

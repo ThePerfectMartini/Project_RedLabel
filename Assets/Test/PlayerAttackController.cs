@@ -127,6 +127,9 @@ public class PlayerAttackController : MonoBehaviour
     /// <summary>현재 실행 중인 액션의 시간 진행 비율 (0 ~ 1).</summary>
     public float CurrentActionNormalizedTime => currentActionDuration > 0f ? Mathf.Clamp01((Time.time - currentActionStartTime) / currentActionDuration) : 1f;
 
+    /// <summary>현재 실행 중인 액션 데이터.</summary>
+    public ActionData CurrentExecutingAction => currentExecutingAction;
+
     // ═══════════════════════════════════════════════════════════
     // 초기화
     // ═══════════════════════════════════════════════════════════

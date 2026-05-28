@@ -346,7 +346,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PhaseRunner
   phase: {fileID: 11400000, guid: 127b3f4d54e4219499097bd4a3b38001, type: 2}
-  playOnStart: 0
+  playOnStart: 1
   controller: {fileID: 64757744}
 --- !u!114 &64757749
 MonoBehaviour:

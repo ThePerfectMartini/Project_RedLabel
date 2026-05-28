@@ -37,6 +37,8 @@ public class PhaseRunner : MonoBehaviour
     private int lastSelectedIndex = -1;
     public int LastSelectedIndex => lastSelectedIndex;
     private bool isRunning;
+    private ActionData currentExecutingAction;
+    public ActionData CurrentExecutingAction => currentExecutingAction;
 
     // ── 중단 토큰 ──
     private InterruptToken currentToken;
@@ -287,7 +289,13 @@ public class PhaseRunner : MonoBehaviour
 
         foreach (var action in sequence.actions)
         {
-            if (currentToken.IsInterrupted) yield break;
+            if (currentToken.IsInterrupted)
+            {
+                currentExecutingAction = null;
+                yield break;
+            }
+
+            currentExecutingAction = action;
 
             ActionState state = CreateState(action, currentToken);
             if (state == null) continue;
@@ -316,6 +324,8 @@ public class PhaseRunner : MonoBehaviour
         {
             if (c != null) yield return c;
         }
+
+        currentExecutingAction = null;
     }
 
     private ActionState CreateState(ActionData action, InterruptToken token)

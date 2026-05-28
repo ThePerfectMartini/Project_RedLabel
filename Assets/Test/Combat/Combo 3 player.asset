@@ -18,5 +18,5 @@ MonoBehaviour:
   inputWindowStart: 0.2
   inputWindowEnd: 0.5
   children: []
-  isLauncher: 0
+  isLauncher: 1
   isAirFinisher: 0

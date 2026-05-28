@@ -69,7 +69,7 @@ MonoBehaviour:
     forwardMoveOnly: 0
     attackMoveSpeed: 0
     enableDynamicMovement: 1
-    autoMoveSpeed: 10
+    autoMoveSpeed: 0
     startMoveSpeed: 30
     brakeOnOppositeInput: 0
     oppositeBrakeSpeed: 3

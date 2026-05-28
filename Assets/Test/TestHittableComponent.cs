@@ -26,18 +26,22 @@ public class TestHittableComponent : MonoBehaviour, IHittable, IHasHealth
     public float CurrentHealthRatio => maxHP > 0f ? currentHP / maxHP : 0f;
 
     // ── 전투 컴포넌트 참조 (선택적 — 없어도 기본 동작) ────────
-    private DodgeController  dodgeController;
-    private ParryController  parryController;
-    private GroggyController groggyController;
-    private Rigidbody        rb;
+    private DodgeController        dodgeController;
+    private ParryController        parryController;
+    private GroggyController       groggyController;
+    private Rigidbody              rb;
+    private PlayerAttackController playerAttackController;
+    private PhaseRunner            phaseRunner;
 
     private void Awake()
     {
-        currentHP       = maxHP;
-        dodgeController  = GetComponent<DodgeController>();
-        parryController  = GetComponent<ParryController>();
-        groggyController = GetComponent<GroggyController>();
-        rb               = GetComponent<Rigidbody>();
+        currentHP              = maxHP;
+        dodgeController        = GetComponent<DodgeController>();
+        parryController        = GetComponent<ParryController>();
+        groggyController       = GetComponent<GroggyController>();
+        rb                     = GetComponent<Rigidbody>();
+        playerAttackController = GetComponent<PlayerAttackController>();
+        phaseRunner            = GetComponent<PhaseRunner>();
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -46,6 +50,10 @@ public class TestHittableComponent : MonoBehaviour, IHittable, IHasHealth
 
     public bool OnHit(CombatHitData hitData)
     {
+        // ── 0단계: 무적 상태 체크 (피격 판정 원천 무효화) ──
+        if (IsInvincibleActive())
+            return false;
+
         // ── 1단계: 회피 무적 프레임 ─────────────────────────────
         if (dodgeController != null && dodgeController.TryInvincibleBlock())
             return false; // 피해 차단
@@ -77,33 +85,46 @@ public class TestHittableComponent : MonoBehaviour, IHittable, IHasHealth
                       $"  경직: {hitData.hitStunDuration:F2}s");
         }
 
-        // ── 낙백: AddForce 대신 linearVelocity 직접 설정 (지면 마찰로 인한 속도 소실 방지) ──
-        Vector3 knockVel = Vector3.zero;
-        if (rb)
-        {
-            Vector3 dir = hitData.hitDirection;
-            knockVel = new Vector3(
-                dir.x * hitData.knockbackForce.x,
-                hitData.knockbackForce.y,
-                dir.z * hitData.knockbackForce.z
-            );
-            rb.linearVelocity = knockVel;
-        }
+        // ── 슈퍼 아머 (경직 및 넉백 면역) 체크 ──
+        bool isSuperArmor = IsSuperArmorActive();
 
-        // ── 피격 반응 애니메이션 코루틴 (hitReactionType 기반 분기) ──
-        AnimationController animCtrl = GetComponentInChildren<AnimationController>();
-        if (animCtrl)
+        if (!isSuperArmor)
         {
-            StopAllCoroutines(); // 이전 피격 반응 중단 후 새 반응 시작
-            switch (hitData.hitReactionType)
+            // ── 낙백: AddForce 대신 linearVelocity 직접 설정 (지면 마찰로 인한 속도 소실 방지) ──
+            Vector3 knockVel = Vector3.zero;
+            if (rb)
             {
-                case HitReactionType.Launched:
-                    StartCoroutine(LaunchedReactionRoutine(animCtrl, hitData.hitStunDuration, knockVel));
-                    break;
-                case HitReactionType.Normal:
-                default:
-                    StartCoroutine(NormalHitRoutine(animCtrl, hitData.hitStunDuration, knockVel));
-                    break;
+                Vector3 dir = hitData.hitDirection;
+                knockVel = new Vector3(
+                    dir.x * hitData.knockbackForce.x,
+                    hitData.knockbackForce.y,
+                    dir.z * hitData.knockbackForce.z
+                );
+                rb.linearVelocity = knockVel;
+            }
+
+            // ── 피격 반응 애니메이션 코루틴 (hitReactionType 기반 분기) ──
+            AnimationController animCtrl = GetComponentInChildren<AnimationController>();
+            if (animCtrl)
+            {
+                StopAllCoroutines(); // 이전 피격 반응 중단 후 새 반응 시작
+                switch (hitData.hitReactionType)
+                {
+                    case HitReactionType.Launched:
+                        StartCoroutine(LaunchedReactionRoutine(animCtrl, hitData.hitStunDuration, knockVel));
+                        break;
+                    case HitReactionType.Normal:
+                    default:
+                        StartCoroutine(NormalHitRoutine(animCtrl, hitData.hitStunDuration, knockVel));
+                        break;
+                }
+            }
+        }
+        else
+        {
+            if (logOnHit)
+            {
+                Debug.Log($"[TestHittable] {gameObject.name} 슈퍼 아머 활성화로 인해 경직 및 넉백 무시!");
             }
         }
 
@@ -215,5 +236,51 @@ public class TestHittableComponent : MonoBehaviour, IHittable, IHasHealth
     public void SetHP(float hp)
     {
         currentHP = Mathf.Clamp(hp, 0f, maxHP);
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // 방어 상태 판단 헬퍼 메서드
+    // ═══════════════════════════════════════════════════════════
+
+    private bool IsInvincibleActive()
+    {
+        // 1. 플레이어 공격 액션 내 무적 체크
+        if (playerAttackController && playerAttackController.IsAttacking)
+        {
+            var action = playerAttackController.CurrentExecutingAction;
+            if (action != null && action.isInvincible)
+                return true;
+        }
+
+        // 2. 적 패턴 액션 내 무적 체크
+        if (phaseRunner)
+        {
+            var action = phaseRunner.CurrentExecutingAction;
+            if (action != null && action.isInvincible)
+                return true;
+        }
+
+        return false;
+    }
+
+    private bool IsSuperArmorActive()
+    {
+        // 1. 플레이어 공격 액션 내 슈퍼 아머 체크
+        if (playerAttackController && playerAttackController.IsAttacking)
+        {
+            var action = playerAttackController.CurrentExecutingAction;
+            if (action != null && action.isSuperArmor)
+                return true;
+        }
+
+        // 2. 적 패턴 액션 내 슈퍼 아머 체크
+        if (phaseRunner)
+        {
+            var action = phaseRunner.CurrentExecutingAction;
+            if (action != null && action.isSuperArmor)
+                return true;
+        }
+
+        return false;
     }
 }

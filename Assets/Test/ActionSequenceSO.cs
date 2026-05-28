@@ -94,6 +94,13 @@ public class ActionData
     [Tooltip("가드 불능 여부. true면 가드/패링 모두 뚫고 피해를 줍니다.")]
     public bool isUnblockable = false;
 
+    [Header("방어 상태 설정")]
+    [Tooltip("경직 및 넉백(밀려남)에 면역을 갖습니다. 데미지 및 그로기는 정상 적용됩니다.")]
+    public bool isSuperArmor = false;
+
+    [Tooltip("피격 판정 자체를 무시하여 데미지, 그로기, 넉백, 경직 모두 면역을 갖습니다.")]
+    public bool isInvincible = false;
+
     [Header("공격 중 이동 설정")]
     [Tooltip("공격 동작 중에도 캐릭터가 이동할 수 있도록 허용합니다. 기본값은 차단입니다.")]
     public bool allowMoveWhileAttacking = false;
@@ -152,6 +159,12 @@ public class ActionSequenceSO : ScriptableObject
         {
             if (action.speed <= 0f) action.speed = 0.01f;
             if (action.timeLimit < 0f) action.timeLimit = 0f;
+
+            // 슈퍼 아머와 무적은 동시에 체크될 수 없도록 제어
+            if (action.isInvincible && action.isSuperArmor)
+            {
+                action.isSuperArmor = false;
+            }
 
             // 가속도 미사용 시 관련 값 초기화
             if (!action.useAcceleration)
@@ -230,6 +243,26 @@ public class ActionDataDrawer : UnityEditor.PropertyDrawer
             if (property.FindPropertyRelative("playAnimation").boolValue)
                 DrawProperty(ref rect, property, "animationName", " ㄴ 애니메이션 이름");
             
+            DrawDivider(ref rect);
+
+            DrawHeader(ref rect, "▶ 방어 상태 설정");
+            UnityEditor.SerializedProperty superArmorProp = property.FindPropertyRelative("isSuperArmor");
+            UnityEditor.SerializedProperty invincibleProp = property.FindPropertyRelative("isInvincible");
+
+            UnityEditor.EditorGUI.BeginChangeCheck();
+            DrawProperty(ref rect, property, "isSuperArmor", "슈퍼 아머 (경직 면역)");
+            if (UnityEditor.EditorGUI.EndChangeCheck() && superArmorProp.boolValue)
+            {
+                invincibleProp.boolValue = false;
+            }
+
+            UnityEditor.EditorGUI.BeginChangeCheck();
+            DrawProperty(ref rect, property, "isInvincible", "무적 상태 (피격 면역)");
+            if (UnityEditor.EditorGUI.EndChangeCheck() && invincibleProp.boolValue)
+            {
+                superArmorProp.boolValue = false;
+            }
+
             DrawDivider(ref rect);
 
             string[] actionTypeNames = { "이동 (Move)", "대기 (Wait)", "변동 좌표 타격", "고정 좌표 타격", "원거리 투사체 공격" };
@@ -553,6 +586,11 @@ public class ActionDataDrawer : UnityEditor.PropertyDrawer
         if (playAnim) height += AddProp(property, "animationName");
         
         height += dividerHeight;
+
+        height += headerHeight;
+        height += AddPropsCount(property, "isSuperArmor", "isInvincible");
+        height += dividerHeight;
+
         height += AddProp(property, "actionType"); 
 
         if (actionType == ActionType.Move)
