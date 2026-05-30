@@ -1,0 +1,69 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 862587ca3bdf47cbbc0bc89990afa31f, type: 3}
+  m_Name: "\uC6D0\uAC70\uB9AC\uACF5\uACA9\uD14C\uC2A4\uD2B8"
+  m_EditorClassIdentifier: Assembly-CSharp::ActionSequenceSO
+  actions:
+  - rid: 3421880996624072805
+  - rid: 3421880996624072806
+  references:
+    version: 2
+    RefIds:
+    - rid: 3421880996624072805
+      type: {class: RangedAttackActionData, ns: , asm: Assembly-CSharp}
+      data:
+        showGizmo: 0
+        executeParallel: 0
+        playAnimation: 1
+        animationName: Attack
+        isSuperArmor: 0
+        isInvincible: 0
+        isFixedAttack: 0
+        targetType: 1
+        targetPosition: {x: 0, y: 0, z: 0}
+        targetTag: Player
+        damage: 10
+        knockbackForce: {x: 15, y: 5, z: 15}
+        attackShape: 0
+        attackRadius: 1.5
+        attackHeight: 2
+        attackHitBoxSize: {x: 2, y: 1, z: 2}
+        attackOffset: {x: 0, y: 0, z: 0}
+        hitStunDuration: 0.15
+        hitStopDuration: 0
+        staggerValue: 10
+        isLauncher: 0
+        canBeParried: 1
+        isUnblockable: 0
+        castDamageOnStart: 0
+        useJumpInAttack: 0
+        attackJumpForce: 5
+        isContinuousAttack: 0
+        continuousDuration: 2
+        hitTickCooldown: 1
+        snapToPlayerXAxis: 0
+        moveDirection8: 0
+        projectilePrefab: {fileID: 3866743101856953148, guid: 70719582b822066418495ff0c7cc5570, type: 3}
+        projectileCount: 10
+        projectileInterval: 0.1
+        projectileSpeed: 15
+        projectileLifeTime: 1
+    - rid: 3421880996624072806
+      type: {class: WaitActionData, ns: , asm: Assembly-CSharp}
+      data:
+        showGizmo: 0
+        executeParallel: 0
+        playAnimation: 1
+        animationName: Idle
+        isSuperArmor: 0
+        isInvincible: 0
+        timeLimit: 1

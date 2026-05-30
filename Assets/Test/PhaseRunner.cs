@@ -57,6 +57,13 @@ public class PhaseRunner : MonoBehaviour
     // AttackCaster 참조 (캐싱)
     private AttackCaster attackCaster;
 
+    private float FacingSignX => Mathf.Abs(Mathf.DeltaAngle(transform.eulerAngles.y, 180f)) < 90f ? 1f : -1f;
+
+    private Vector3 GetOrientedOffset(Vector3 offset)
+    {
+        return new Vector3(offset.x * FacingSignX, offset.y, offset.z);
+    }
+
 
     private void Awake()
     {
@@ -78,8 +85,8 @@ public class PhaseRunner : MonoBehaviour
     private void CacheTarget()
     {
         if (!phase || string.IsNullOrEmpty(phase.targetTag)) return;
-        GameObject targetObj = GameObject.FindWithTag(phase.targetTag);
-        if (targetObj) cachedTarget = targetObj.transform;
+        // CombatTargetRegistry로 FindWithTag 대체
+        cachedTarget = CombatTargetRegistry.GetFirst(phase.targetTag);
     }
 
     private void OnEnable()
@@ -301,11 +308,7 @@ public class PhaseRunner : MonoBehaviour
             if (state == null) continue;
 
             // 공격 액션이면 hitConfirmed 리셋
-            bool isAttackAction = action.actionType == ActionType.VariableAttack
-                || action.actionType == ActionType.FixedAttack
-                || action.actionType == ActionType.RangedAttack;
-
-            if (isAttackAction)
+            if (action is AttackActionData)
                 hitConfirmed = false;
 
             if (action.executeParallel)
@@ -330,15 +333,14 @@ public class PhaseRunner : MonoBehaviour
 
     private ActionState CreateState(ActionData action, InterruptToken token)
     {
-        switch (action.actionType)
+        return action switch
         {
-            case ActionType.Move:          return new MoveState(controller, action, token, cachedTarget);
-            case ActionType.Wait:          return new WaitState(controller, action, token, cachedTarget);
-            case ActionType.VariableAttack:
-            case ActionType.FixedAttack:   return new AttackState(controller, action, token, cachedTarget);
-            case ActionType.RangedAttack:  return new RangedAttackState(controller, action, token, cachedTarget);
-            default: return null;
-        }
+            MoveActionData move           => new MoveState(controller, move, token, cachedTarget),
+            WaitActionData wait           => new WaitState(controller, wait, token, cachedTarget),
+            RangedAttackActionData ranged => new RangedAttackState(controller, ranged, token, cachedTarget),
+            AttackActionData atk          => new AttackState(controller, atk, token, cachedTarget),
+            _                             => null,
+        };
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -416,50 +418,56 @@ public class PhaseRunner : MonoBehaviour
 
     private void DrawActionGizmo(ActionData action, Color color)
     {
-        if (action.actionType != ActionType.VariableAttack &&
-            action.actionType != ActionType.FixedAttack &&
-            action.actionType != ActionType.RangedAttack)
-            return;
+        // 공격 액션이 아니면 기즈모 없음
+        if (action is not AttackActionData atkData) return;
+
+        // 공격 타이밍에 하늘색 기즈모를 파란색 기즈모로 동적 하이라이트
+        if (Application.isPlaying && attackCaster && attackCaster.IsGizmoHighlighted)
+        {
+            if (currentExecutingAction == action)
+            {
+                color = new Color(0f, 0.4f, 1f, 1f); // 파란색 강조
+            }
+        }
 
         // 원거리: 발사 지점만 작은 구로 표시
-        if (action.actionType == ActionType.RangedAttack)
+        if (atkData is RangedAttackActionData rangedData)
         {
             Gizmos.color = new Color(color.r, color.g, color.b, 0.8f);
-            Vector3 spawnPos = transform.position + (transform.rotation * action.attackOffset);
+            Vector3 spawnPos = transform.position + GetOrientedOffset(rangedData.attackOffset);
             Gizmos.DrawWireSphere(spawnPos, 0.12f);
             return;
         }
 
-        Vector3 center = action.actionType == ActionType.FixedAttack
-            ? action.targetPosition
-            : transform.position + (transform.rotation * action.attackOffset);
+        Vector3 center = atkData.isFixedAttack
+            ? atkData.targetPosition
+            : transform.position + GetOrientedOffset(atkData.attackOffset);
 
         Gizmos.color = new Color(color.r, color.g, color.b, 0.85f);
         Color fillColor = new Color(color.r, color.g, color.b, 0.12f);
 
-        switch (action.attackShape)
+        switch (atkData.attackShape)
         {
             case AttackShape.Sphere:
-                Gizmos.DrawWireSphere(center, action.attackRadius);
+                Gizmos.DrawWireSphere(center, atkData.attackRadius);
                 Gizmos.color = fillColor;
-                Gizmos.DrawSphere(center, action.attackRadius);
+                Gizmos.DrawSphere(center, atkData.attackRadius);
                 break;
 
             case AttackShape.Box:
-                Quaternion boxRot = action.actionType == ActionType.FixedAttack
-                    ? Quaternion.identity : transform.rotation;
+                Quaternion boxRot = atkData.isFixedAttack ? Quaternion.identity : Quaternion.Euler(0f, transform.eulerAngles.y, 0f);
                 Matrix4x4 prev = Gizmos.matrix;
                 Gizmos.matrix = Matrix4x4.TRS(center, boxRot, Vector3.one);
                 Gizmos.color = new Color(color.r, color.g, color.b, 0.85f);
-                Gizmos.DrawWireCube(Vector3.zero, action.attackHitBoxSize);
+                Gizmos.DrawWireCube(Vector3.zero, atkData.attackHitBoxSize);
                 Gizmos.color = fillColor;
-                Gizmos.DrawCube(Vector3.zero, action.attackHitBoxSize);
+                Gizmos.DrawCube(Vector3.zero, atkData.attackHitBoxSize);
                 Gizmos.matrix = prev;
                 break;
 
             case AttackShape.Cylinder:
                 Gizmos.color = new Color(color.r, color.g, color.b, 0.85f);
-                DrawGizmoCylinder(center, action.attackRadius, action.attackHeight);
+                DrawGizmoCylinder(center, atkData.attackRadius, atkData.attackHeight);
                 break;
         }
     }

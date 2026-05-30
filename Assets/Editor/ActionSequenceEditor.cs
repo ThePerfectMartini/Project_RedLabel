@@ -1,3 +1,5 @@
+// 구형 에디터 무력화 (Assets/Test/Editor/ActionSequenceSOEditor.cs가 새 에디터로 작동합니다)
+/*
 using UnityEditor;
 using UnityEngine;
 
@@ -17,3 +19,4 @@ public class ActionSequenceEditor : Editor
         serializedObject.ApplyModifiedProperties();
     }
 }
+*/

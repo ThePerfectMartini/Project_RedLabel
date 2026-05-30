@@ -449,10 +449,11 @@ public class PhaseDebugMonitor : MonoBehaviour
         string tag = string.IsNullOrEmpty(targetTag) ? phase.targetTag : targetTag;
         if (string.IsNullOrEmpty(tag)) return Vector3.zero;
 
-        GameObject playerObj = GameObject.FindWithTag(tag);
-        if (!playerObj) return Vector3.zero;
+        // CombatTargetRegistry로 FindWithTag 대체 (GC 압력 없음)
+        Transform target = CombatTargetRegistry.GetFirst(tag);
+        if (!target) return Vector3.zero;
 
-        Vector3 diff = playerObj.transform.position - transform.position;
+        Vector3 diff = target.position - transform.position;
         diff.y = 0f;
         return diff;
     }

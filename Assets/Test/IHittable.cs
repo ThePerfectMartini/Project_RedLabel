@@ -48,10 +48,10 @@ public struct CombatHitData
 
     // ── 팩토리 ────────────────────────────────────────────────
     /// <summary>
-    /// ActionData 로부터 CombatHitData 를 생성합니다.
+    /// AttackActionData 로부터 CombatHitData 를 생성합니다.
     /// 타격 로직에서 직접 필드를 채우지 않고 이 메서드를 사용하세요.
     /// </summary>
-    public static CombatHitData Create(ActionData action, Vector3 hitPoint,
+    public static CombatHitData Create(AttackActionData action, Vector3 hitPoint,
                                         Vector3 hitDir, Transform attacker)
     {
         return new CombatHitData
@@ -64,7 +64,7 @@ public struct CombatHitData
             hitStunDuration = action.hitStunDuration,
             hitStopDuration = action.hitStopDuration,
             staggerValue    = action.staggerValue,
-            // isLauncher 플래그만으로 피격 반응 종류를 결정합니다 (넉백 Y값 무관)
+            // isLauncher 플래그만으로 피격 반응 종류를 결정합니다 (넓백 Y값 무관)
             hitReactionType = action.isLauncher ? HitReactionType.Launched : HitReactionType.Normal,
             isLauncher      = action.isLauncher,
             canBeParried    = action.canBeParried,

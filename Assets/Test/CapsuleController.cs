@@ -74,47 +74,64 @@ public class CapsuleController : MonoBehaviour
         return snappedDir.normalized;
     }
 
-    public IEnumerator MoveInDirection(Vector3 direction, float startSpeed, float maxSpeed, bool isAccelerated, float accel, bool checkTime, float timeLimit,
-                                        InterruptToken token = null)
+    public static float ApplyEaseCurve(float t, EaseType easeType, float exponent)
+    {
+        t = Mathf.Clamp01(t);
+        if (easeType == EaseType.EaseIn)
+        {
+            return Mathf.Pow(t, exponent);
+        }
+        else // EaseOut
+        {
+            return 1f - Mathf.Pow(1f - t, exponent);
+        }
+    }
+
+    public IEnumerator MoveInDirection(Vector3 direction, MoveActionData actionData, InterruptToken token = null)
     {
         isManualMoving = true;
         try
         {
-            maxSpeed = Mathf.Max(0.01f, maxSpeed);
-            startSpeed = Mathf.Max(0f, startSpeed);
-            if (isAccelerated) accel = Mathf.Max(0.01f, accel);
+            float maxSpeed = Mathf.Max(0.01f, actionData.speed);
+            float startSpeed = Mathf.Max(0f, actionData.startSpeed);
+            float startExponent = Mathf.Max(1f, actionData.startEaseExponent);
+            float startEaseDuration = Mathf.Max(0f, actionData.startEaseDuration);
 
-            float currentSpeed = isAccelerated ? startSpeed : maxSpeed;
-            float timer = 0f;
-            
-            Vector3 normalizedDir = Get8Direction(direction.normalized);
+            float elapsed = 0f;
+            Vector3 normalizedDir = actionData.use8DirectionMovement ? Get8Direction(direction.normalized) : direction.normalized;
             UpdateFacingDirection(normalizedDir.x);
 
             while (true)
             {
                 if (token != null && token.IsInterrupted) yield break;
 
-                if (checkTime)
+                float currentSpeed = maxSpeed;
+                elapsed += Time.fixedDeltaTime;
+
+                // 출발 가속 연산 (시간 기준)
+                if (actionData.useStartEase && startEaseDuration > 0.001f && elapsed < startEaseDuration)
                 {
-                    timer += Time.fixedDeltaTime; 
-                    if (timer >= timeLimit) yield break;
+                    float t = Mathf.Clamp01(elapsed / startEaseDuration);
+                    float tVal = ApplyEaseCurve(t, actionData.startEaseType, startExponent);
+                    currentSpeed = Mathf.Lerp(startSpeed, maxSpeed, tVal);
                 }
 
-                if (isAccelerated)
+                rb.linearVelocity = new Vector3(normalizedDir.x * currentSpeed, rb.linearVelocity.y, normalizedDir.z * currentSpeed);
+
+                if (actionData.stopOnTimeLimit)
                 {
-                    currentSpeed = Mathf.MoveTowards(currentSpeed, maxSpeed, accel * Time.fixedDeltaTime);
+                    if (elapsed >= actionData.timeLimit) yield break;
                 }
 
-                Vector3 nextPos = rb.position + (normalizedDir * currentSpeed * Time.fixedDeltaTime);
-                // 방향 이동에서도 y축은 변하지 않도록 고정
-                nextPos.y = rb.position.y;
-                rb.MovePosition(nextPos);
-                
                 yield return new WaitForFixedUpdate();
             }
         }
         finally
         {
+            if (!actionData.allowSlideAfterAction)
+            {
+                rb.linearVelocity = new Vector3(0f, rb.linearVelocity.y, 0f);
+            }
             isManualMoving = false;
         }
     }
@@ -131,7 +148,7 @@ public class CapsuleController : MonoBehaviour
         );
     }
 
-    public IEnumerator MoveToTarget(Transform trackingTarget, Vector3 specificTargetPos, bool isTracking, ActionData actionData,
+    public IEnumerator MoveToTarget(Transform trackingTarget, Vector3 specificTargetPos, bool isTracking, MoveActionData actionData,
                                      InterruptToken token = null)
     {
         isManualMoving = true;
@@ -139,9 +156,9 @@ public class CapsuleController : MonoBehaviour
         {
             float maxSpeed = Mathf.Max(0.01f, actionData.speed);
             float startSpeed = Mathf.Max(0f, actionData.startSpeed);
-            float accel = actionData.useAcceleration ? Mathf.Max(0.01f, actionData.acceleration) : 0f;
+            float startExponent = Mathf.Max(1f, actionData.startEaseExponent);
+            float startEaseDuration = Mathf.Max(0f, actionData.startEaseDuration);
 
-            float currentSpeed = actionData.useAcceleration ? startSpeed : maxSpeed;
             float totalTimer = 0f;
             float refreshTimer = 0f;
             int refreshCount = 0;
@@ -151,6 +168,15 @@ public class CapsuleController : MonoBehaviour
             bool checkTime = actionData.stopOnTimeLimit;
 
             bool canRefresh = actionData.usePositionRefresh;
+
+            Vector3 initialTargetPos = isTracking ? trackingTarget.position : specificTargetPos;
+            if (actionData.trackXOnly && !actionData.trackZOnly) initialTargetPos.z = rb.position.z;
+            else if (!actionData.trackXOnly && actionData.trackZOnly) initialTargetPos.x = rb.position.x;
+            initialTargetPos.y = 0f;
+
+            Vector3 startPos = rb.position;
+            startPos.y = 0f;
+            Vector3 initialOffsetTargetPos = GetOffsetPosition(startPos, initialTargetPos, actionData.targetOffset);
 
             while (true)
             {
@@ -179,11 +205,11 @@ public class CapsuleController : MonoBehaviour
                         if (totalTimer >= actionData.timeLimit) yield break;
                     }
 
-                    // 종료 조건 1: 목표 좌표 도달 검사 (절대 좌표 기준)
                     if (checkDest && CheckDestinationReached(offsetTargetPos, actionData.destinationStopDistance))
+                    {
                         yield break;
+                    }
 
-                    // 종료 조건 2: 이동 중 타겟 감지 검사 (추적 모드에서만)
                     if (checkDetect && trackingTarget != null && CheckTargetInDetectRange(trackingTarget.position, actionData))
                         yield break;
 
@@ -191,31 +217,27 @@ public class CapsuleController : MonoBehaviour
 
                     Vector3 dirToDest = destination - rb.position;
                     dirToDest.y = 0f; 
-                    float distToDest = dirToDest.magnitude;
 
-                    Vector3 moveDir = Get8Direction(dirToDest);
+                    Vector3 moveDir = actionData.use8DirectionMovement ? Get8Direction(dirToDest) : dirToDest.normalized;
                     UpdateFacingDirection(moveDir.x);
 
-                    if (actionData.useAcceleration)
+                    float currentSpeed = maxSpeed;
+
+                    // 출발 가속 연산 (시간 기준)
+                    if (actionData.useStartEase && startEaseDuration > 0.001f && totalTimer < startEaseDuration)
                     {
-                        currentSpeed = Mathf.MoveTowards(currentSpeed, maxSpeed, accel * Time.fixedDeltaTime);
+                        float t = Mathf.Clamp01(totalTimer / startEaseDuration);
+                        float tVal = ApplyEaseCurve(t, actionData.startEaseType, startExponent);
+                        currentSpeed = Mathf.Lerp(startSpeed, maxSpeed, tVal);
                     }
 
-                    float moveStep = currentSpeed * Time.fixedDeltaTime;
-                    Vector3 nextPos;
-
-                    if (distToDest <= moveStep)
-                    {
-                        nextPos = rb.position + dirToDest;
-                    }
-                    else
-                    {
-                        nextPos = rb.position + (moveDir * moveStep);
-                    }
-
-                    rb.MovePosition(nextPos);
+                    Vector3 velocity = moveDir * currentSpeed;
+                    rb.linearVelocity = new Vector3(velocity.x, rb.linearVelocity.y, velocity.z);
                     
                     yield return new WaitForFixedUpdate();
+
+                    // 경과 시간 누적
+                    totalTimer += Time.fixedDeltaTime;
 
                     if (canRefresh)
                     {
@@ -233,8 +255,6 @@ public class CapsuleController : MonoBehaviour
                     }
                     else if (isTracking && !actionData.usePositionRefresh)
                     {
-                        // 동적 새로고침 미사용 시에만 매 프레임 추적 갱신
-                        // 동적 새로고침 사용 시 횟수 소진 후에는 마지막 좌표에 고정
                         needsRefresh = true;
                     }
                 }
@@ -242,6 +262,10 @@ public class CapsuleController : MonoBehaviour
         }
         finally
         {
+            if (!actionData.allowSlideAfterAction)
+            {
+                rb.linearVelocity = new Vector3(0f, rb.linearVelocity.y, 0f);
+            }
             isManualMoving = false;
         }
     }
@@ -260,7 +284,7 @@ public class CapsuleController : MonoBehaviour
     /// <summary>
     /// 종료 조건 2: 추적 타겟이 감지 범위 안에 있는지 검사
     /// </summary>
-    private bool CheckTargetInDetectRange(Vector3 targetObjPos, ActionData actionData)
+    private bool CheckTargetInDetectRange(Vector3 targetObjPos, MoveActionData actionData)
     {
         targetObjPos.y = rb.position.y;
 
@@ -304,7 +328,7 @@ public class CapsuleController : MonoBehaviour
         }
     }
 
-    public void TeleportToTarget(Transform trackingTarget, Vector3 specificTargetPos, bool isTracking, ActionData actionData)
+    public void TeleportToTarget(Transform trackingTarget, Vector3 specificTargetPos, bool isTracking, MoveActionData actionData)
     {
         Vector3 baseTargetPos = specificTargetPos;
         if (isTracking)

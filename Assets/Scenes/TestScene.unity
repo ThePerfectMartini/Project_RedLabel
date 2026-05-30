@@ -131,6 +131,7 @@ GameObject:
   - component: {fileID: 64757741}
   - component: {fileID: 64757740}
   - component: {fileID: 64757739}
+  - component: {fileID: 64757752}
   - component: {fileID: 64757746}
   - component: {fileID: 64757743}
   - component: {fileID: 64757744}
@@ -139,6 +140,7 @@ GameObject:
   - component: {fileID: 64757748}
   - component: {fileID: 64757749}
   - component: {fileID: 64757750}
+  - component: {fileID: 64757751}
   m_Layer: 7
   m_Name: Capsule
   m_TagString: Enemy
@@ -345,7 +347,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0ab3133e03aead649a26cdb6902d9476, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PhaseRunner
-  phase: {fileID: 11400000, guid: 127b3f4d54e4219499097bd4a3b38001, type: 2}
+  phase: {fileID: 11400000, guid: 128e53e25ec732144bdf8637aa8b33d2, type: 2}
   playOnStart: 1
   controller: {fileID: 64757744}
 --- !u!114 &64757749
@@ -355,12 +357,12 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 64757738}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 1d231e0f0d2a51b4f891503b847bb59a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PhaseDebugMonitor
-  phase: {fileID: 11400000, guid: 127b3f4d54e4219499097bd4a3b38001, type: 2}
+  phase: {fileID: 11400000, guid: 128e53e25ec732144bdf8637aa8b33d2, type: 2}
   targetTag: Player
 --- !u!114 &64757750
 MonoBehaviour:
@@ -376,6 +378,31 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::TestHittableComponent
   logOnHit: 1
   maxHP: 100
+--- !u!114 &64757751
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 64757738}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6409c3705f8853246ad5f85ec8380662, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CombatTargetRegistrar
+  registryTag: Enemy
+--- !u!114 &64757752
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 64757738}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d19429e81d176ec49952fc8b6092f218, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::AnimationAttackEventRelay
 --- !u!1 &83680448
 GameObject:
   m_ObjectHideFlags: 0
@@ -452,6 +479,7 @@ GameObject:
   - component: {fileID: 180801550}
   - component: {fileID: 180801547}
   - component: {fileID: 180801551}
+  - component: {fileID: 180801561}
   - component: {fileID: 180801557}
   - component: {fileID: 180801556}
   - component: {fileID: 180801555}
@@ -459,6 +487,7 @@ GameObject:
   - component: {fileID: 180801553}
   - component: {fileID: 180801559}
   - component: {fileID: 180801558}
+  - component: {fileID: 180801560}
   m_Layer: 6
   m_Name: Player
   m_TagString: Player
@@ -579,9 +608,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6d0a9d66a870c9b40bf96410b55055dd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerAttackController
-  groundRoots:
-  - {fileID: 11400000, guid: 22dcd87015d9a0344b524e000db830dd, type: 2}
-  airRoots: []
+  zCombo: {fileID: 11400000, guid: f3b7de2b840525b45837a8b8ce9305c6, type: 2}
+  xCombo: {fileID: 11400000, guid: 980206f46064fd94abfb38e3f59c4653, type: 2}
+  qCombo: {fileID: 0}
+  wCombo: {fileID: 0}
+  eCombo: {fileID: 0}
+  rCombo: {fileID: 0}
   groundCheck: {fileID: 1066854454}
   groundCheckRadius: 0.25
   groundLayer:
@@ -658,6 +690,33 @@ MonoBehaviour:
   justGuardHealAmount: 5
   justGuardTimeScale: 0.1
   justGuardSlowDuration: 0.3
+--- !u!114 &180801560
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 180801546}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6409c3705f8853246ad5f85ec8380662, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CombatTargetRegistrar
+  registryTag: Player
+--- !u!114 &180801561
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 180801546}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 80ffd2eeff65dbc408e85d45bdbae384, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ComboDebugger
+  attackController: {fileID: 180801555}
+  capsuleController: {fileID: 180801557}
 --- !u!1 &264117252
 GameObject:
   m_ObjectHideFlags: 0
@@ -942,6 +1001,7 @@ GameObject:
   - component: {fileID: 1369689365}
   - component: {fileID: 1369689363}
   - component: {fileID: 1369689364}
+  - component: {fileID: 1369689368}
   m_Layer: 6
   m_Name: Visual
   m_TagString: Player
@@ -1058,6 +1118,18 @@ Transform:
   m_Children: []
   m_Father: {fileID: 180801550}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1369689368
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1369689362}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d19429e81d176ec49952fc8b6092f218, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::AnimationAttackEventRelay
 --- !u!1 &2134023280
 GameObject:
   m_ObjectHideFlags: 0

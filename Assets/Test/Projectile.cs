@@ -2,13 +2,13 @@ using UnityEngine;
 
 public class Projectile : MonoBehaviour
 {
-    private ActionData data;
+    private RangedAttackActionData data;
     private Vector3 moveDirection;
     private LayerMask targetLayer;
     private GameObject attacker;
     private AttackCaster attackCaster;
 
-    public void Initialize(ActionData attackData, Vector3 direction, LayerMask layer, GameObject attackerObj)
+    public void Initialize(RangedAttackActionData attackData, Vector3 direction, LayerMask layer, GameObject attackerObj)
     {
         data = attackData;
         moveDirection = direction.normalized;

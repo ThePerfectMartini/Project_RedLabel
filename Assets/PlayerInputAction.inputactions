@@ -25,6 +25,60 @@
                     "initialStateCheck": false
                 },
                 {
+                    "name": "AttackZ",
+                    "type": "Button",
+                    "id": "e0a1b2c3-d4e5-6789-0abc-def012345678",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                },
+                {
+                    "name": "AttackX",
+                    "type": "Button",
+                    "id": "e1a1b2c3-d4e5-6789-0abc-def012345678",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                },
+                {
+                    "name": "AttackQ",
+                    "type": "Button",
+                    "id": "e2a1b2c3-d4e5-6789-0abc-def012345678",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                },
+                {
+                    "name": "AttackW",
+                    "type": "Button",
+                    "id": "e3a1b2c3-d4e5-6789-0abc-def012345678",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                },
+                {
+                    "name": "AttackE",
+                    "type": "Button",
+                    "id": "e4a1b2c3-d4e5-6789-0abc-def012345678",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                },
+                {
+                    "name": "AttackR",
+                    "type": "Button",
+                    "id": "e5a1b2c3-d4e5-6789-0abc-def012345678",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                },
+                {
                     "name": "Jump",
                     "type": "Button",
                     "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
@@ -115,7 +169,7 @@
                     "interactions": "",
                     "processors": "",
                     "groups": "",
-                    "action": "Attack",
+                    "action": "AttackZ",
                     "isComposite": false,
                     "isPartOfComposite": false
                 },
@@ -126,7 +180,51 @@
                     "interactions": "",
                     "processors": "",
                     "groups": "",
-                    "action": "Attack",
+                    "action": "AttackX",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "q1c2d3e4-f5a6-7890-bcde-fa2345678902",
+                    "path": "<Keyboard>/q",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "AttackQ",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "w1c2d3e4-f5a6-7890-bcde-fa2345678903",
+                    "path": "<Keyboard>/w",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "AttackW",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "e1c2d3e4-f5a6-7890-bcde-fa2345678904",
+                    "path": "<Keyboard>/e",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "AttackE",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "r1c2d3e4-f5a6-7890-bcde-fa2345678905",
+                    "path": "<Keyboard>/r",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "AttackR",
                     "isComposite": false,
                     "isPartOfComposite": false
                 },

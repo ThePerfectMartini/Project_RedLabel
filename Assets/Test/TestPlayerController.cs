@@ -75,6 +75,7 @@ public class TestPlayerController : MonoBehaviour
     // ── 공격 물리 마찰 우회용 가상 속도 ──
     private Vector3 activeAttackVelocity;
     private bool wasAttackActiveLastFrame;
+    private bool isSlidingAfterAction;
 
     // ═══════════════════════════════════════════════════════════
     // 초기화
@@ -97,9 +98,16 @@ public class TestPlayerController : MonoBehaviour
         inputActions.Player.Move.started   += OnMoveStarted;
 
         inputActions.Player.Jump.started   += OnJumpStarted;
-        inputActions.Player.Attack.started += OnAttackStarted;
         inputActions.Player.Parry.started  += OnParryStarted;
         inputActions.Player.Dodge.started  += OnDodgeStarted;
+
+        // ── 콤보 공격 입력 바인딩 ──
+        inputActions.Player.AttackX.started += OnAttackXStarted;
+        inputActions.Player.AttackZ.started += OnAttackZStarted;
+        inputActions.Player.AttackQ.started += OnAttackQStarted;
+        inputActions.Player.AttackW.started += OnAttackWStarted;
+        inputActions.Player.AttackE.started += OnAttackEStarted;
+        inputActions.Player.AttackR.started += OnAttackRStarted;
     }
 
     private void OnEnable()  => inputActions.Enable();
@@ -111,9 +119,17 @@ public class TestPlayerController : MonoBehaviour
         inputActions.Player.Move.canceled  -= OnMoveCanceled;
         inputActions.Player.Move.started   -= OnMoveStarted;
         inputActions.Player.Jump.started   -= OnJumpStarted;
-        inputActions.Player.Attack.started -= OnAttackStarted;
         inputActions.Player.Parry.started  -= OnParryStarted;
         inputActions.Player.Dodge.started  -= OnDodgeStarted;
+
+        // ── 콤보 공격 입력 바인딩 해제 ──
+        inputActions.Player.AttackX.started -= OnAttackXStarted;
+        inputActions.Player.AttackZ.started -= OnAttackZStarted;
+        inputActions.Player.AttackQ.started -= OnAttackQStarted;
+        inputActions.Player.AttackW.started -= OnAttackWStarted;
+        inputActions.Player.AttackE.started -= OnAttackEStarted;
+        inputActions.Player.AttackR.started -= OnAttackRStarted;
+
         inputActions.Dispose();
     }
 
@@ -164,10 +180,7 @@ public class TestPlayerController : MonoBehaviour
         }
     }
 
-    private void OnAttackStarted(InputAction.CallbackContext ctx)
-    {
-        attackController.RequestAttack();
-    }
+
 
     private void OnParryStarted(InputAction.CallbackContext ctx)
     {
@@ -178,6 +191,22 @@ public class TestPlayerController : MonoBehaviour
     {
         dodgeController?.RequestDodge(moveInput);
     }
+
+    // ── 공격 입력 콜백 ──
+    private void OnAttackXStarted(InputAction.CallbackContext ctx)
+    {
+        Debug.Log("[TestPlayerController] OnAttackXStarted: Keyboard X키 입력 이벤트 수신");
+        attackController.RequestAttack(ComboInputType.X);
+    }
+    private void OnAttackZStarted(InputAction.CallbackContext ctx)
+    {
+        Debug.Log("[TestPlayerController] OnAttackZStarted: Keyboard Z키 입력 이벤트 수신");
+        attackController.RequestAttack(ComboInputType.Z);
+    }
+    private void OnAttackQStarted(InputAction.CallbackContext ctx) => attackController.RequestAttack(ComboInputType.Q);
+    private void OnAttackWStarted(InputAction.CallbackContext ctx) => attackController.RequestAttack(ComboInputType.W);
+    private void OnAttackEStarted(InputAction.CallbackContext ctx) => attackController.RequestAttack(ComboInputType.E);
+    private void OnAttackRStarted(InputAction.CallbackContext ctx) => attackController.RequestAttack(ComboInputType.R);
 
     // ═══════════════════════════════════════════════════════════
     // 매 프레임 처리
@@ -220,16 +249,37 @@ public class TestPlayerController : MonoBehaviour
         }
         else
         {
-            wasAttackActiveLastFrame = false;
+            if (wasAttackActiveLastFrame)
+            {
+                if (attackController.CurrentAllowSlideAfterAction)
+                {
+                    isSlidingAfterAction = true;
+                }
+                wasAttackActiveLastFrame = false;
+            }
         }
 
         // ── ③ 일반 이동 ──
         if (moveInput.sqrMagnitude < 0.01f)
         {
-            rb.linearVelocity = new Vector3(0f, rb.linearVelocity.y, 0f);
+            if (isSlidingAfterAction)
+            {
+                Vector3 flatVel = new Vector3(rb.linearVelocity.x, 0f, rb.linearVelocity.z);
+                if (flatVel.magnitude < 0.15f)
+                {
+                    isSlidingAfterAction = false;
+                    rb.linearVelocity = new Vector3(0f, rb.linearVelocity.y, 0f);
+                }
+            }
+            else
+            {
+                rb.linearVelocity = new Vector3(0f, rb.linearVelocity.y, 0f);
+            }
             SetAnimatorSpeed(0f);
             return;
         }
+
+        isSlidingAfterAction = false;
 
         float speed = isRunning ? runSpeed : moveSpeed;
         Vector3 dir = new Vector3(moveInput.x, 0f, moveInput.y);
@@ -259,10 +309,10 @@ public class TestPlayerController : MonoBehaviour
         float yEuler = transform.eulerAngles.y;
         float facingSignX = Mathf.Abs(Mathf.DeltaAngle(yEuler, 180f)) < 90f ? 1f : -1f;
 
-        // ⓪ 첫 프레임 진입 시 가상 속도를 초기 속도(출발 속도 또는 등속)로 대입하여 즉시 출발 처리
+        // ⓪ 첫 프레임 진입 시 가상 속도를 초기 속도로 대입하여 즉시 출발 처리
         if (!wasAttackActiveLastFrame)
         {
-            float initialSpeed = attackController.CurrentUseLerpMovement ? attackController.CurrentStartMoveSpeed : attackController.CurrentAutoMoveSpeed;
+            float initialSpeed = attackController.CurrentUseStartEase ? attackController.CurrentStartMoveSpeed : attackController.CurrentAutoMoveSpeed;
             activeAttackVelocity = new Vector3(initialSpeed * facingSignX, 0f, 0f);
             wasAttackActiveLastFrame = true;
         }
@@ -284,21 +334,22 @@ public class TestPlayerController : MonoBehaviour
         bool enableDynamic = attackController.CurrentEnableDynamicMovement;
         
         float autoSpeed = 0f;
-        float normTime = 0f;
-        float tVal = 0f;
+        bool isInEaseRange = false; // 현재 프레임이 이징이 켜져있고 가감속 적용 구간인지 감지하는 플래그
 
         if (enableDynamic)
         {
-            if (attackController.CurrentUseLerpMovement)
+            float startEaseDuration = Mathf.Max(0f, attackController.CurrentStartEaseDuration);
+            float elapsed = attackController.CurrentActionElapsedTime;
+
+            if (attackController.CurrentUseStartEase && startEaseDuration > 0.001f && elapsed < startEaseDuration)
             {
-                // Quad Ease Out Easing 적용: 시작 시 가파르게 감속하며 치고 나가고, 끝은 완만하게 목표 속도에 도달
-                normTime = attackController.CurrentActionNormalizedTime;
-                tVal = 1f - (1f - normTime) * (1f - normTime);
+                float t = Mathf.Clamp01(elapsed / startEaseDuration);
+                float tVal = CapsuleController.ApplyEaseCurve(t, attackController.CurrentStartEaseType, attackController.CurrentStartEaseExponent);
                 autoSpeed = Mathf.Lerp(attackController.CurrentStartMoveSpeed, attackController.CurrentAutoMoveSpeed, tVal);
+                isInEaseRange = true;
             }
             else
             {
-                // 가감속 미적용 시: 최종 속도를 즉시/등속으로 사용
                 autoSpeed = attackController.CurrentAutoMoveSpeed;
             }
         }
@@ -358,7 +409,7 @@ public class TestPlayerController : MonoBehaviour
         float finalSpeedX = targetSpeedX;
         float finalSpeedZ = targetSpeedZ;
 
-        if (attackController.CurrentUseLerpMovement)
+        if (isInEaseRange)
         {
             // 반응성 15f 상수로 가상 속도를 타겟 속도에 고정 보간
             float lerpT = 15f * Time.fixedDeltaTime;
@@ -367,11 +418,17 @@ public class TestPlayerController : MonoBehaviour
             finalSpeedX = activeAttackVelocity.x;
             finalSpeedZ = activeAttackVelocity.z;
         }
+        else
+        {
+            // 이징 미사용 구간이거나 체크박스가 꺼졌다면 즉시 물리 속도를 타겟 속도에 대입하여 즉시 정지/즉시 속도 동기화
+            activeAttackVelocity.x = targetSpeedX;
+            activeAttackVelocity.z = targetSpeedZ;
+            finalSpeedX = targetSpeedX;
+            finalSpeedZ = targetSpeedZ;
+        }
 
         // Y축 중력 속도는 그대로 유지하면서 속도 설정
         rb.linearVelocity = new Vector3(finalSpeedX, rb.linearVelocity.y, finalSpeedZ);
-
-
 
         SetAnimatorSpeed(new Vector2(rb.linearVelocity.x, rb.linearVelocity.z).magnitude);
     }

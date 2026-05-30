@@ -1,15 +1,19 @@
 using System.Collections;
 using UnityEngine;
 
+// ═══════════════════════════════════════════════════════════════
+// ActionState — 추상 기반 클래스
+// ═══════════════════════════════════════════════════════════════
+
 public abstract class ActionState
 {
     protected CapsuleController controller;
-    protected ActionData actionData;
-    protected InterruptToken interruptToken;
-    protected Transform cachedTarget;
+    protected ActionData        actionData;
+    protected InterruptToken    interruptToken;
+    protected Transform         cachedTarget;
 
-    /// <param name="token">시퀀스 중단 토큰 (null 허용 — 중단 기능 미사용 시)</param>
-    /// <param name="cachedTarget">PhaseRunner 가 미리 캐싱한 타겟 Transform (null 허용)</param>
+    /// <param name="token">시퀀스 중단 토큰 (null 허용)</param>
+    /// <param name="cachedTarget">PhaseRunner가 미리 캐싱한 타겟 Transform (null 허용)</param>
     public ActionState(CapsuleController controller, ActionData actionData,
                        InterruptToken token = null, Transform cachedTarget = null)
     {
@@ -21,147 +25,252 @@ public abstract class ActionState
 
     public abstract IEnumerator Execute();
 
-    /// <summary>
-    /// 중단 토큰이 설정되었는지 확인합니다.
-    /// 코루틴 루프 내 매 프레임 호출해 안전하게 탈출하세요.
-    /// </summary>
+    /// <summary>중단 토큰이 발동됐는지 확인합니다. 코루틴 루프 내 매 프레임 호출하세요.</summary>
     protected bool ShouldInterrupt()
         => interruptToken != null && interruptToken.IsInterrupted;
 
     protected void PlayAnimation(bool forceRestart = false)
     {
-        if (actionData.playAnimation && controller.animController != null && !string.IsNullOrEmpty(actionData.animationName))
-        {
-            if (forceRestart && controller.animController.animator != null)
-                controller.animController.animator.Play(actionData.animationName, -1, 0f);
-            else
-                controller.animController.Play(actionData.animationName);
-        }
+        if (!actionData.playAnimation) return;
+        if (controller.animController == null) return;
+        if (string.IsNullOrEmpty(actionData.animationName)) return;
+
+        if (forceRestart && controller.animController.animator != null)
+            controller.animController.animator.Play(actionData.animationName, -1, 0f);
+        else
+            controller.animController.Play(actionData.animationName);
     }
 
-    protected Transform GetResolvedTarget()
+    /// <summary>
+    /// 태그로 타겟을 조회합니다. cachedTarget 우선 사용 후 Registry 폴백.
+    /// FindWithTag는 사용하지 않습니다.
+    /// </summary>
+    protected Transform GetResolvedTarget(TargetType targetType, string targetTag)
     {
-        if (actionData.targetType == TargetType.TrackObject)
-        {
-            // 캐싱된 타겟 우선 사용 → FindWithTag 횟수 최소화
-            if (cachedTarget) return cachedTarget;
-            GameObject targetGO = GameObject.FindWithTag(actionData.targetTag);
-            if (targetGO != null) return targetGO.transform;
-        }
-        return null;
+        if (targetType != TargetType.TrackObject) return null;
+        if (cachedTarget) return cachedTarget;
+        return CombatTargetRegistry.GetFirst(targetTag);
     }
 }
 
+// ═══════════════════════════════════════════════════════════════
+// MoveState
+// ═══════════════════════════════════════════════════════════════
 
 public class MoveState : ActionState
 {
-    public MoveState(CapsuleController controller, ActionData actionData,
+    private readonly MoveActionData moveData;
+
+    public MoveState(CapsuleController controller, MoveActionData data,
                      InterruptToken token = null, Transform cachedTarget = null)
-        : base(controller, actionData, token, cachedTarget) { }
+        : base(controller, data, token, cachedTarget)
+    {
+        moveData = data;
+    }
 
     public override IEnumerator Execute()
     {
-        PlayAnimation(); 
-        
-        if (actionData.isTeleport)
+        PlayAnimation();
+
+        if (moveData.isTeleport)
         {
-            if (actionData.targetType == TargetType.Direction)
+            if (moveData.targetType != TargetType.Direction)
             {
-                // 방향 이동에 대해서는 순간이동(오프셋/새로고침) 기능 적용 대상이 아님
-                // 만약 방향 순간이동이 필요하다면 기존처럼 처리하거나, 현재는 구현 생략
-            }
-            else
-            {
-                bool isTracking = actionData.targetType != TargetType.SpecificPosition;
-                Transform trackingTarget = isTracking ? GetResolvedTarget() : null;
-                Vector3 specificPos = actionData.targetPosition;
-                
-                controller.TeleportToTarget(trackingTarget, specificPos, isTracking, actionData);
+                bool isTracking = moveData.targetType != TargetType.SpecificPosition;
+                Transform trackingTarget = isTracking
+                    ? GetResolvedTarget(moveData.targetType, moveData.targetTag)
+                    : null;
+
+                controller.TeleportToTarget(trackingTarget, moveData.targetPosition, isTracking, moveData);
             }
             yield return null;
             yield break;
         }
 
-        if (actionData.useJump)
-        {
-            controller.Jump(actionData.jumpForce);
-        }
+        if (moveData.useJump)
+            controller.Jump(moveData.jumpForce);
 
-        if (actionData.targetType == TargetType.Direction)
+        if (moveData.targetType == TargetType.Direction)
         {
-            Vector3 dir = GetDirectionFromEnum(actionData.moveDirection8);
-            yield return controller.StartCoroutine(controller.MoveInDirection(
-                dir,
-                actionData.startSpeed, actionData.speed, actionData.useAcceleration, actionData.acceleration,
-                actionData.stopOnTimeLimit, actionData.timeLimit,
-                interruptToken
-            ));
+            // Forward/Backward는 CapsuleController.GetDirectionFromEnum이 캐릭터 회전을 반영
+            Vector3 dir = CapsuleController.GetDirectionFromEnum(moveData.moveDirection8);
+            if (dir == Vector3.zero)
+                dir = GetDirectionFromEnum(moveData.moveDirection8); // 고정 방향 폴백
+            yield return controller.StartCoroutine(
+                controller.MoveInDirection(dir, moveData, interruptToken)
+            );
         }
-        else 
+        else
         {
-            bool isTracking = actionData.targetType != TargetType.SpecificPosition;
-            Transform trackingTarget = isTracking ? GetResolvedTarget() : null;
-            Vector3 specificPos = actionData.targetPosition;
-            
-            if (isTracking && trackingTarget == null)
+            bool isTracking = moveData.targetType != TargetType.SpecificPosition;
+            Transform trackingTarget = isTracking
+                ? GetResolvedTarget(moveData.targetType, moveData.targetTag)
+                : null;
+
+            if (isTracking && !trackingTarget)
             {
-                Debug.LogWarning($"Target object with tag '{actionData.targetTag}' not found.");
+                Debug.LogWarning($"[MoveState] 태그 '{moveData.targetTag}' 타겟을 찾을 수 없습니다.");
                 yield break;
             }
 
-            yield return controller.StartCoroutine(controller.MoveToTarget(
-                trackingTarget, specificPos, isTracking, actionData, interruptToken
-            ));
+            yield return controller.StartCoroutine(
+                controller.MoveToTarget(trackingTarget, moveData.targetPosition, isTracking, moveData, interruptToken)
+            );
         }
     }
 
-    private Vector3 GetDirectionFromEnum(MoveDirection8 dir8)
+    private static Vector3 GetDirectionFromEnum(MoveDirection8 dir8)
     {
+        // Forward/Backward는 캐릭터 회전에 의존하므로 CapsuleController의 구현을 위임합니다.
+        // 나머지 고정 방향은 직접 처리합니다.
         switch (dir8)
         {
-            case MoveDirection8.Up: return Vector3.forward;
-            case MoveDirection8.Down: return Vector3.back;
-            case MoveDirection8.Left: return Vector3.left;
-            case MoveDirection8.Right: return Vector3.right;
-            case MoveDirection8.UpLeft: return new Vector3(-1, 0, 1).normalized;
-            case MoveDirection8.UpRight: return new Vector3(1, 0, 1).normalized;
-            case MoveDirection8.DownLeft: return new Vector3(-1, 0, -1).normalized;
-            case MoveDirection8.DownRight: return new Vector3(1, 0, -1).normalized;
+            case MoveDirection8.Up:        return Vector3.forward;
+            case MoveDirection8.Down:      return Vector3.back;
+            case MoveDirection8.Left:      return Vector3.left;
+            case MoveDirection8.Right:     return Vector3.right;
+            case MoveDirection8.UpLeft:    return new Vector3(-1f, 0f,  1f).normalized;
+            case MoveDirection8.UpRight:   return new Vector3( 1f, 0f,  1f).normalized;
+            case MoveDirection8.DownLeft:  return new Vector3(-1f, 0f, -1f).normalized;
+            case MoveDirection8.DownRight: return new Vector3( 1f, 0f, -1f).normalized;
+            // Forward/Backward는 CapsuleController에서 캐릭터 회전 기준으로 계산
             case MoveDirection8.Forward:
-                // 캐릭터가 현재 바라보는 월드 기준 앞 방향 (로컬 left 방향이 2.5D 앞)
-                return controller.transform.rotation * Vector3.left;
             case MoveDirection8.Backward:
-                // 캐릭터가 현재 바라보는 월드 기준 뒤 방향 (로컬 right 방향이 2.5D 뒤)
-                return controller.transform.rotation * Vector3.right;
-            default: return Vector3.zero;
+            default:
+                // controller 인스턴스를 통해 실제 방향을 계산해야 하므로
+                // Direction 모드의 Execute()에서 CapsuleController.GetDirectionFromEnum을 직접 호출
+                return Vector3.zero;
         }
     }
 }
 
+// ═══════════════════════════════════════════════════════════════
+// WaitState
+// ═══════════════════════════════════════════════════════════════
+
 public class WaitState : ActionState
 {
-    public WaitState(CapsuleController controller, ActionData actionData,
+    private readonly WaitActionData waitData;
+
+    public WaitState(CapsuleController controller, WaitActionData data,
                      InterruptToken token = null, Transform cachedTarget = null)
-        : base(controller, actionData, token, cachedTarget) { }
+        : base(controller, data, token, cachedTarget)
+    {
+        waitData = data;
+    }
 
     public override IEnumerator Execute()
     {
         PlayAnimation();
+
         float elapsed = 0f;
-        while (elapsed < actionData.timeLimit)
+        while (elapsed < waitData.timeLimit)
         {
             if (ShouldInterrupt()) yield break;
-            elapsed += UnityEngine.Time.deltaTime;
+            elapsed += Time.deltaTime;
             yield return null;
         }
     }
 }
 
+// ═══════════════════════════════════════════════════════════════
+// AttackState
+// ═══════════════════════════════════════════════════════════════
+
 public class AttackState : ActionState
 {
-    public AttackState(CapsuleController controller, ActionData actionData,
+    private readonly AttackActionData attackData;
+
+    public AttackState(CapsuleController controller, AttackActionData data,
                        InterruptToken token = null, Transform cachedTarget = null)
-        : base(controller, actionData, token, cachedTarget) { }
+        : base(controller, data, token, cachedTarget)
+    {
+        attackData = data;
+    }
+
+    public override IEnumerator Execute()
+    {
+        if (ShouldInterrupt()) yield break;
+
+        AttackCaster caster = controller.GetComponent<AttackCaster>();
+        try
+        {
+            if (caster)
+            {
+                Vector3 fixedPos = Vector3.zero;
+
+                if (attackData.isFixedAttack)
+                {
+                    Transform target = GetResolvedTarget(attackData.targetType, attackData.targetTag);
+                    if (target)
+                        fixedPos = target.position + attackData.attackOffset;
+                    else if (attackData.targetType == TargetType.SpecificPosition)
+                        fixedPos = attackData.targetPosition + attackData.attackOffset;
+                    else
+                        fixedPos = controller.transform.position + attackData.attackOffset;
+
+                    caster.SetAttackData(attackData, true, fixedPos);
+                }
+                else
+                {
+                    caster.SetAttackData(attackData, false, Vector3.zero);
+                }
+
+                if (attackData.castDamageOnStart)
+                    caster.CastDamage();
+            }
+
+            // 공격 시 동시 점프(승룡권 등)
+            if (attackData.useJumpInAttack)
+                controller.Jump(attackData.attackJumpForce);
+
+            PlayAnimation(true);
+
+            float animLength = 0f;
+            if (controller.animController != null && attackData.playAnimation)
+                animLength = controller.animController.GetAnimationLength(attackData.animationName);
+
+            float duration = attackData.isContinuousAttack
+                ? Mathf.Max(animLength, attackData.continuousDuration)
+                : animLength;
+
+            if (duration > 0f)
+            {
+                float elapsed = 0f;
+                while (elapsed < duration)
+                {
+                    if (ShouldInterrupt()) yield break;
+                    elapsed += Time.deltaTime;
+                    yield return null;
+                }
+            }
+            else
+            {
+                yield return null;
+            }
+        }
+        finally
+        {
+            if (caster)
+                caster.StopContinuousCast();
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RangedAttackState
+// ═══════════════════════════════════════════════════════════════
+
+public class RangedAttackState : ActionState
+{
+    private readonly RangedAttackActionData rangedData;
+
+    public RangedAttackState(CapsuleController controller, RangedAttackActionData data,
+                              InterruptToken token = null, Transform cachedTarget = null)
+        : base(controller, data, token, cachedTarget)
+    {
+        rangedData = data;
+    }
 
     public override IEnumerator Execute()
     {
@@ -170,98 +279,32 @@ public class AttackState : ActionState
         AttackCaster caster = controller.GetComponent<AttackCaster>();
         if (caster)
         {
-            Vector3 fixedPos = Vector3.zero;
-            bool isFixed = actionData.actionType == ActionType.FixedAttack;
+            Transform target   = GetResolvedTarget(rangedData.targetType, rangedData.targetTag);
+            bool      hasTarget = false;
+            Vector3   targetPos = Vector3.zero;
 
-            if (isFixed)
-            {
-                Transform target = GetResolvedTarget();
-                if (target)
-                    fixedPos = target.position + actionData.attackOffset;
-                else if (actionData.targetType == TargetType.SpecificPosition)
-                    fixedPos = actionData.targetPosition + actionData.attackOffset;
-                else
-                    fixedPos = controller.transform.position + actionData.attackOffset;
-
-                caster.SetAttackData(actionData, true, fixedPos);
-            }
-            else
-            {
-                caster.SetAttackData(actionData, false, Vector3.zero);
-            }
-
-            // 시작 시 즉시 타격 판정 플래그가 참일 때만 명시적으로 CastDamage 호출
-            if (actionData.castDamageOnStart)
-            {
-                caster.CastDamage();
-            }
-        }
-
-        // 공격 시 동시 점프(도약) 물리 적용 (승룡권 등)
-        if (actionData.useJumpInAttack)
-        {
-            controller.Jump(actionData.attackJumpForce);
-        }
-
-        PlayAnimation(true);
-
-        if (controller.animController != null && actionData.playAnimation)
-        {
-            float animLength = controller.animController.GetAnimationLength(actionData.animationName);
-            float elapsed = 0f;
-            while (elapsed < animLength)
-            {
-                if (ShouldInterrupt()) yield break;
-                elapsed += UnityEngine.Time.deltaTime;
-                yield return null;
-            }
-        }
-        else if (!actionData.playAnimation)
-        {
-            yield return null;
-        }
-    }
-}
-
-public class RangedAttackState : ActionState
-{
-    public RangedAttackState(CapsuleController controller, ActionData actionData,
-                              InterruptToken token = null, Transform cachedTarget = null)
-        : base(controller, actionData, token, cachedTarget) { }
-
-    public override IEnumerator Execute()
-    {
-        if (ShouldInterrupt()) yield break;
-
-        AttackCaster caster = controller.GetComponent<AttackCaster>();
-        if (caster != null)
-        {
-            Transform target = GetResolvedTarget();
-            bool hasTarget = false;
-            Vector3 targetPos = Vector3.zero;
-
-            if (target != null)
+            if (target)
             {
                 targetPos = target.position;
                 hasTarget = true;
             }
-            else if (actionData.targetType == TargetType.SpecificPosition)
+            else if (rangedData.targetType == TargetType.SpecificPosition)
             {
-                targetPos = actionData.targetPosition;
+                targetPos = rangedData.targetPosition;
                 hasTarget = true;
             }
 
-            caster.SetAttackData(actionData, hasTarget, targetPos);
+            caster.SetAttackData(rangedData, hasTarget, targetPos);
         }
 
         PlayAnimation(true);
 
         float animLength = 0f;
-        if (controller.animController != null && actionData.playAnimation)
-            animLength = controller.animController.GetAnimationLength(actionData.animationName);
+        if (controller.animController != null && rangedData.playAnimation)
+            animLength = controller.animController.GetAnimationLength(rangedData.animationName);
 
-        float totalShootTime = actionData.projectileCount > 1
-            ? (actionData.projectileCount - 1) * actionData.projectileInterval
+        float totalShootTime = rangedData.projectileCount > 1
+            ? (rangedData.projectileCount - 1) * rangedData.projectileInterval
             : 0f;
 
         float waitTime = Mathf.Max(animLength, totalShootTime);
@@ -271,13 +314,13 @@ public class RangedAttackState : ActionState
             while (elapsed < waitTime)
             {
                 if (ShouldInterrupt()) yield break;
-                elapsed += UnityEngine.Time.deltaTime;
+                elapsed += Time.deltaTime;
                 yield return null;
             }
         }
         else
         {
-            yield return null; 
+            yield return null;
         }
     }
 }

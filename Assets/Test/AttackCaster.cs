@@ -3,42 +3,84 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-
 public class AttackCaster : MonoBehaviour
 {
     [Header("설정")]
     [Tooltip("이 캐릭터가 공격할 대상의 레이어 (예: Player 레이어)")]
     public LayerMask targetLayer;
-    
-    private ActionData currentAttackData;
 
-    /// <summary>
-    /// 타격이 1회 이상 성공했을 때 발행되는 이벤트 (콤보 판정용)
-    /// </summary>
+    private AttackActionData currentAttackData;
+
+    /// <summary>타격이 1회 이상 성공했을 때 발행되는 이벤트 (콤보 판정용)</summary>
     public event Action OnHitConfirmed;
 
     private float attackTriggerTime = -1f;
-    private float gizmoBlueDuration = 0.2f; 
-    
-    private bool isFixedAttack;
+    private float gizmoBlueDuration = 0.2f;
+
+    private bool    isFixedAttack;
     private Vector3 fixedWorldPosition;
-    private bool rangedHitConfirmed;
+    private bool    rangedHitConfirmed;
 
-    /// <summary>현재 공격에서 이미 타격한 콜라이더 (다중 히트 방지)</summary>
-    private readonly HashSet<Collider> hitTargetsThisAttack = new HashSet<Collider>();
+    /// <summary>현재 공격에서 이미 타격한 콜라이더 (단일 공격 다중 히트 방지)</summary>
+    private readonly HashSet<Collider>           hitTargetsThisAttack = new HashSet<Collider>();
+    private readonly Dictionary<Collider, float> targetLastHitTimes   = new Dictionary<Collider, float>();
 
+    private Coroutine continuousCastCoroutine;
 
-    public void SetAttackData(ActionData data, bool isFixed = false, Vector3 fixedPos = default)
+    /// <summary>
+    /// 캐릭터가 바라보는 가로축 실제 방향 부호 (오른쪽 = +1, 왼쪽 = -1)
+    /// </summary>
+    private float FacingSignX => Mathf.Abs(Mathf.DeltaAngle(transform.eulerAngles.y, 180f)) < 90f ? 1f : -1f;
+
+    /// <summary>
+    /// 캐릭터가 바라보는 실제 방향을 반영하여 공격 오프셋의 X축을 정면 기준으로 변환합니다.
+    /// </summary>
+    private Vector3 GetOrientedOffset(Vector3 offset)
     {
-        currentAttackData = data;
-        isFixedAttack = isFixed;
-        fixedWorldPosition = fixedPos;
-        rangedHitConfirmed = false;
+        return new Vector3(offset.x * FacingSignX, offset.y, offset.z);
     }
 
     /// <summary>
-    /// 투사체가 타겟에 명중했을 때 호출. 첫 명중에만 콤보 이벤트를 발동합니다.
+    /// 최근 공격이 실행되어 판정이 유효한 상태(기즈모 강조 시간 내)인지 여부
     /// </summary>
+    public bool IsGizmoHighlighted
+    {
+        get
+        {
+            if (!Application.isPlaying) return false;
+            if (currentAttackData == null) return false;
+
+            if (currentAttackData.isContinuousAttack)
+                return continuousCastCoroutine != null;
+
+            return Time.time - attackTriggerTime <= gizmoBlueDuration;
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // 외부 API
+    // ═══════════════════════════════════════════════════════════
+
+    public void StopContinuousCast()
+    {
+        if (continuousCastCoroutine != null)
+        {
+            StopCoroutine(continuousCastCoroutine);
+            continuousCastCoroutine = null;
+        }
+        hitTargetsThisAttack.Clear();
+        targetLastHitTimes.Clear();
+    }
+
+    public void SetAttackData(AttackActionData data, bool isFixed = false, Vector3 fixedPos = default)
+    {
+        currentAttackData   = data;
+        isFixedAttack       = isFixed;
+        fixedWorldPosition  = fixedPos;
+        rangedHitConfirmed  = false;
+    }
+
+    /// <summary>투사체가 타겟에 명중했을 때 호출. 첫 명중에만 콤보 이벤트를 발동합니다.</summary>
     public void NotifyRangedHit()
     {
         if (rangedHitConfirmed) return;
@@ -50,65 +92,71 @@ public class AttackCaster : MonoBehaviour
     {
         if (currentAttackData == null) return;
         attackTriggerTime = Time.time;
-        hitTargetsThisAttack.Clear(); // 매 공격마다 리셋
 
-        if (currentAttackData.actionType == ActionType.RangedAttack)
+        StopContinuousCast();
+
+        if (currentAttackData is RangedAttackActionData rangedData)
         {
-            if (currentAttackData.projectilePrefab != null)
-            {
-                StartCoroutine(FireRangedProjectiles(currentAttackData, isFixedAttack, fixedWorldPosition));
-            }
+            if (rangedData.projectilePrefab != null)
+                StartCoroutine(FireRangedProjectiles(rangedData));
             return;
         }
 
-        Vector3 centerPoint;
-        
-        if (isFixedAttack)
-        {
-            centerPoint = fixedWorldPosition;
-        }
+        if (currentAttackData.isContinuousAttack)
+            continuousCastCoroutine = StartCoroutine(ContinuousCastRoutine());
         else
-        {
-            centerPoint = transform.position + (transform.rotation * currentAttackData.attackOffset);
-        }
+            PerformOverlapCast(false);
+    }
 
-        Collider[] hits = new Collider[0];
+    // ═══════════════════════════════════════════════════════════
+    // 오버랩 캐스트 (단일 + 지속 통합)
+    // ═══════════════════════════════════════════════════════════
 
-        if (currentAttackData.attackShape == AttackShape.Sphere)
-        {
-            hits = Physics.OverlapSphere(centerPoint, currentAttackData.attackRadius, targetLayer);
-        }
-        else if (currentAttackData.attackShape == AttackShape.Box)
-        {
-            Quaternion boxRot = isFixedAttack ? Quaternion.identity : transform.rotation;
-            hits = Physics.OverlapBox(centerPoint, currentAttackData.attackHitBoxSize * 0.5f, boxRot, targetLayer);
-        }
-        else if (currentAttackData.attackShape == AttackShape.Cylinder)
-        {
-            float offsetForCapsule = Mathf.Max(0, currentAttackData.attackHeight * 0.5f - currentAttackData.attackRadius);
-            Vector3 capTop    = centerPoint + Vector3.up * offsetForCapsule;
-            Vector3 capBottom = centerPoint - Vector3.up * offsetForCapsule;
-            hits = Physics.OverlapCapsule(capBottom, capTop, currentAttackData.attackRadius, targetLayer);
-        }
+    /// <param name="isContinuous">지속 타격 모드 여부 (쿨다운 체크 여부를 결정)</param>
+    private void PerformOverlapCast(bool isContinuous)
+    {
+        Vector3 centerPoint = isFixedAttack
+            ? fixedWorldPosition
+            : transform.position + GetOrientedOffset(currentAttackData.attackOffset);
+
+        Collider[] hits = CastByShape(centerPoint);
 
         bool anyHit = false;
         foreach (Collider hitCol in hits)
         {
-            // ── 다중 히트 방지 ──────────────────────────────────
-            if (hitTargetsThisAttack.Contains(hitCol)) continue;
+            if (hitCol.transform.IsChildOf(transform) || hitCol.gameObject == gameObject) continue;
+
+            // ── 히트 쿨다운 체크 ──
+            if (isContinuous)
+            {
+                float cooldown = currentAttackData.hitTickCooldown;
+                if (cooldown <= 0f)
+                {
+                    if (hitTargetsThisAttack.Contains(hitCol)) continue;
+                }
+                else
+                {
+                    if (targetLastHitTimes.TryGetValue(hitCol, out float lastHit)
+                        && Time.time - lastHit < cooldown) continue;
+                }
+                targetLastHitTimes[hitCol] = Time.time;
+            }
+            else
+            {
+                if (hitTargetsThisAttack.Contains(hitCol)) continue;
+            }
+
             hitTargetsThisAttack.Add(hitCol);
 
-            // ── IHittable 인터페이스 호출 ──────────────────────
             IHittable hittable = hitCol.GetComponentInParent<IHittable>();
             if (hittable == null)
             {
-                // IHittable 미구현 오브젝트는 기존 방식으로 폴백 (하위호환)
                 Debug.Log($"[AttackCaster] {hitCol.name} 타격 (IHittable 미구현 — 폴백)");
                 continue;
             }
 
-            Vector3 hitDir   = (hitCol.transform.position - transform.position).normalized;
-            Vector3 hitPoint = hitCol.ClosestPoint(transform.position);
+            Vector3       hitDir   = (hitCol.transform.position - transform.position).normalized;
+            Vector3       hitPoint = hitCol.ClosestPoint(transform.position);
             CombatHitData hitData  = CombatHitData.Create(currentAttackData, hitPoint, hitDir, transform);
 
             bool applied = hittable.OnHit(hitData);
@@ -123,38 +171,82 @@ public class AttackCaster : MonoBehaviour
             OnHitConfirmed?.Invoke();
     }
 
-    private IEnumerator FireRangedProjectiles(ActionData data, bool fixedAttack, Vector3 fixedPos)
+    private IEnumerator ContinuousCastRoutine()
+    {
+        float elapsed  = 0f;
+        float duration = currentAttackData.continuousDuration;
+
+        while (elapsed < duration)
+        {
+            PerformOverlapCast(true);
+            yield return null;
+            elapsed += Time.deltaTime;
+        }
+
+        continuousCastCoroutine = null;
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // 형상별 오버랩 캐스트 헬퍼
+    // ═══════════════════════════════════════════════════════════
+
+    private Collider[] CastByShape(Vector3 center)
+    {
+        switch (currentAttackData.attackShape)
+        {
+            case AttackShape.Sphere:
+                return Physics.OverlapSphere(center, currentAttackData.attackRadius, targetLayer);
+
+            case AttackShape.Box:
+            {
+                Quaternion boxRot = isFixedAttack ? Quaternion.identity : transform.rotation;
+                return Physics.OverlapBox(center, currentAttackData.attackHitBoxSize * 0.5f, boxRot, targetLayer);
+            }
+
+            case AttackShape.Cylinder:
+            {
+                float offset    = Mathf.Max(0f, currentAttackData.attackHeight * 0.5f - currentAttackData.attackRadius);
+                Vector3 capTop  = center + Vector3.up * offset;
+                Vector3 capBot  = center - Vector3.up * offset;
+                return Physics.OverlapCapsule(capBot, capTop, currentAttackData.attackRadius, targetLayer);
+            }
+
+            default:
+                return Array.Empty<Collider>();
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // 원거리 투사체 발사
+    // ═══════════════════════════════════════════════════════════
+
+    private IEnumerator FireRangedProjectiles(RangedAttackActionData data)
     {
         int count = Mathf.Max(1, data.projectileCount);
 
         for (int i = 0; i < count; i++)
         {
-            Vector3 spawnPos = transform.position + (transform.rotation * data.attackOffset);
+            Vector3 spawnPos = transform.position + GetOrientedOffset(data.attackOffset);
             Vector3 shootDir = transform.rotation * CapsuleController.GetDirectionFromEnum(data.moveDirection8);
-            
-            // ▼ 버그 수정 3: 매 발사 시점마다 타겟의 최신 위치를 새로 찾아서 방향을 갱신합니다.
-            if (data.targetType == TargetType.TrackObject)
-            {
-                if (!string.IsNullOrEmpty(data.targetTag))
-                {
-                    GameObject tGO = GameObject.FindWithTag(data.targetTag);
-                    if (tGO != null)
-                    {
-                        Vector3 targetPos = tGO.transform.position;
-                        if (data.trackXOnly && !data.trackZOnly) targetPos.z = spawnPos.z;
-                        if (!data.trackXOnly && data.trackZOnly) targetPos.x = spawnPos.x;
 
-                        if (data.snapToPlayerXAxis)
-                        {
-                            // 플레이어가 있는 좌/우 방향으로 순수 X축 스냅
-                            float xSign = Mathf.Sign(targetPos.x - spawnPos.x);
-                            if (xSign == 0f) xSign = transform.right.x >= 0f ? 1f : -1f; // 정확히 겹칠 경우 현재 방향 사용
-                            shootDir = new Vector3(xSign, 0f, 0f);
-                        }
-                        else
-                        {
-                            shootDir = (targetPos - spawnPos).normalized;
-                        }
+            // 매 발사 시점마다 최신 타겟 위치를 갱신
+            if (data.targetType == TargetType.TrackObject && !string.IsNullOrEmpty(data.targetTag))
+            {
+                // CombatTargetRegistry로 FindWithTag 대체
+                Transform target = CombatTargetRegistry.GetFirst(data.targetTag);
+                if (target)
+                {
+                    Vector3 targetPos = target.position;
+
+                    if (data.snapToPlayerXAxis)
+                    {
+                        float xSign = Mathf.Sign(targetPos.x - spawnPos.x);
+                        if (xSign == 0f) xSign = transform.right.x >= 0f ? 1f : -1f;
+                        shootDir = new Vector3(xSign, 0f, 0f);
+                    }
+                    else
+                    {
+                        shootDir = (targetPos - spawnPos).normalized;
                     }
                 }
             }
@@ -162,116 +254,25 @@ public class AttackCaster : MonoBehaviour
             {
                 shootDir = (data.targetPosition - spawnPos).normalized;
             }
-            else if (fixedAttack)
+            else if (isFixedAttack)
             {
-                shootDir = (fixedPos - spawnPos).normalized;
+                shootDir = (fixedWorldPosition - spawnPos).normalized;
             }
 
             if (shootDir == Vector3.zero) shootDir = transform.forward;
 
             GameObject projObj = Instantiate(data.projectilePrefab, spawnPos, Quaternion.identity);
-            
-            Projectile proj = projObj.GetComponent<Projectile>();
-            if (proj == null) proj = projObj.AddComponent<Projectile>(); 
-            
+            Projectile proj    = projObj.GetComponent<Projectile>() ?? projObj.AddComponent<Projectile>();
             proj.Initialize(data, shootDir, targetLayer, gameObject);
 
             if (i < count - 1 && data.projectileInterval > 0f)
-            {
                 yield return new WaitForSeconds(data.projectileInterval);
-            }
         }
     }
 
-    private void OnDrawGizmos()
-    {
-        if (currentAttackData != null)
-        {
-            if (currentAttackData.actionType == ActionType.RangedAttack) return;
+    // ═══════════════════════════════════════════════════════════
+    // 기즈모
+    // ═══════════════════════════════════════════════════════════
 
-            // 플레이 중에 공격 판정 기즈모 지속 시간이 지나면 더 이상 그리지 않습니다.
-            if (Application.isPlaying && Time.time - attackTriggerTime > gizmoBlueDuration) return;
 
-            Color gizmoColor = new Color(1f, 0f, 0f, 0.5f);
-            if (Application.isPlaying && Time.time - attackTriggerTime <= gizmoBlueDuration)
-            {
-                gizmoColor = new Color(0f, 0f, 1f, 0.5f); 
-            }
-            
-            Gizmos.color = gizmoColor;
-            
-            if (isFixedAttack)
-            {
-                Gizmos.matrix = Matrix4x4.identity;
-                Vector3 localCenter = fixedWorldPosition;
-
-                if (currentAttackData.attackShape == AttackShape.Sphere)
-                {
-                    Gizmos.DrawWireSphere(localCenter, currentAttackData.attackRadius);
-                }
-                else if (currentAttackData.attackShape == AttackShape.Box)
-                {
-                    Gizmos.DrawWireCube(localCenter, currentAttackData.attackHitBoxSize);
-                    Gizmos.color = new Color(gizmoColor.r, gizmoColor.g, gizmoColor.b, 0.1f);
-                    Gizmos.DrawCube(localCenter, currentAttackData.attackHitBoxSize);
-                }
-                else if (currentAttackData.attackShape == AttackShape.Cylinder)
-                {
-                    DrawWireCylinder(localCenter, currentAttackData.attackRadius, currentAttackData.attackHeight);
-                }
-            }
-            else
-            {
-                Matrix4x4 rotationMatrix = Matrix4x4.TRS(transform.position, transform.rotation, Vector3.one);
-                Gizmos.matrix = rotationMatrix;
-                Vector3 localCenter = currentAttackData.attackOffset;
-
-                if (currentAttackData.attackShape == AttackShape.Sphere)
-                {
-                    Gizmos.DrawWireSphere(localCenter, currentAttackData.attackRadius);
-                }
-                else if (currentAttackData.attackShape == AttackShape.Box)
-                {
-                    Gizmos.DrawWireCube(localCenter, currentAttackData.attackHitBoxSize);
-                    Gizmos.color = new Color(gizmoColor.r, gizmoColor.g, gizmoColor.b, 0.1f);
-                    Gizmos.DrawCube(localCenter, currentAttackData.attackHitBoxSize);
-                }
-                else if (currentAttackData.attackShape == AttackShape.Cylinder)
-                {
-                    DrawWireCylinder(localCenter, currentAttackData.attackRadius, currentAttackData.attackHeight);
-                }
-            }
-            
-            Gizmos.matrix = Matrix4x4.identity;
-        }
-    }
-
-    private void DrawWireCylinder(Vector3 center, float radius, float height)
-    {
-        float halfHeight = height * 0.5f;
-        Vector3 topCenter = center + Vector3.up * halfHeight;
-        Vector3 bottomCenter = center - Vector3.up * halfHeight;
-
-        DrawGizmoCircle(topCenter, radius);
-        DrawGizmoCircle(bottomCenter, radius);
-
-        Gizmos.DrawLine(topCenter + Vector3.right * radius, bottomCenter + Vector3.right * radius);
-        Gizmos.DrawLine(topCenter - Vector3.right * radius, bottomCenter - Vector3.right * radius);
-        Gizmos.DrawLine(topCenter + Vector3.forward * radius, bottomCenter + Vector3.forward * radius);
-        Gizmos.DrawLine(topCenter - Vector3.forward * radius, bottomCenter - Vector3.forward * radius);
-    }
-
-    private void DrawGizmoCircle(Vector3 center, float radius)
-    {
-        int segments = 24;
-        float angle = 0f;
-        Vector3 lastPoint = center + new Vector3(Mathf.Cos(0) * radius, 0, Mathf.Sin(0) * radius);
-        for (int i = 1; i <= segments; i++)
-        {
-            angle += (360f / segments) * Mathf.Deg2Rad;
-            Vector3 nextPoint = center + new Vector3(Mathf.Cos(angle) * radius, 0, Mathf.Sin(angle) * radius);
-            Gizmos.DrawLine(lastPoint, nextPoint);
-            lastPoint = nextPoint;
-        }
-    }
 }
