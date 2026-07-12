@@ -47,8 +47,9 @@ public abstract class ActionState
     /// </summary>
     protected Transform GetResolvedTarget(TargetType targetType, string targetTag)
     {
-        if (targetType != TargetType.TrackObject) return null;
+        if (targetType != TargetType.TrackObject && targetType != TargetType.ReturnToSpawn) return null;
         if (cachedTarget) return cachedTarget;
+        if (targetType == TargetType.ReturnToSpawn) return null; // 복귀인데 타겟이 없으면 멈춤
         return CombatTargetRegistry.GetFirst(targetTag);
     }
 }
@@ -92,10 +93,8 @@ public class MoveState : ActionState
 
         if (moveData.targetType == TargetType.Direction)
         {
-            // Forward/Backward는 CapsuleController.GetDirectionFromEnum이 캐릭터 회전을 반영
-            Vector3 dir = CapsuleController.GetDirectionFromEnum(moveData.moveDirection8);
-            if (dir == Vector3.zero)
-                dir = GetDirectionFromEnum(moveData.moveDirection8); // 고정 방향 폴백
+            // Forward/Backward는 캐릭터의 실제 회전을 반영하여 월드 방향을 구합니다.
+            Vector3 dir = controller.GetWorldDirectionFromEnum(moveData.moveDirection8);
             yield return controller.StartCoroutine(
                 controller.MoveInDirection(dir, moveData, interruptToken)
             );
@@ -119,29 +118,7 @@ public class MoveState : ActionState
         }
     }
 
-    private static Vector3 GetDirectionFromEnum(MoveDirection8 dir8)
-    {
-        // Forward/Backward는 캐릭터 회전에 의존하므로 CapsuleController의 구현을 위임합니다.
-        // 나머지 고정 방향은 직접 처리합니다.
-        switch (dir8)
-        {
-            case MoveDirection8.Up:        return Vector3.forward;
-            case MoveDirection8.Down:      return Vector3.back;
-            case MoveDirection8.Left:      return Vector3.left;
-            case MoveDirection8.Right:     return Vector3.right;
-            case MoveDirection8.UpLeft:    return new Vector3(-1f, 0f,  1f).normalized;
-            case MoveDirection8.UpRight:   return new Vector3( 1f, 0f,  1f).normalized;
-            case MoveDirection8.DownLeft:  return new Vector3(-1f, 0f, -1f).normalized;
-            case MoveDirection8.DownRight: return new Vector3( 1f, 0f, -1f).normalized;
-            // Forward/Backward는 CapsuleController에서 캐릭터 회전 기준으로 계산
-            case MoveDirection8.Forward:
-            case MoveDirection8.Backward:
-            default:
-                // controller 인스턴스를 통해 실제 방향을 계산해야 하므로
-                // Direction 모드의 Execute()에서 CapsuleController.GetDirectionFromEnum을 직접 호출
-                return Vector3.zero;
-        }
-    }
+
 }
 
 // ═══════════════════════════════════════════════════════════════

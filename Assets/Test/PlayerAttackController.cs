@@ -333,9 +333,27 @@ public class PlayerAttackController : MonoBehaviour
                     attackCaster.SetAttackData(atkAction, false, Vector3.zero);
 
                 if (action.executeParallel)
+                {
                     parallelCoroutines.Add(StartCoroutine(state.Execute()));
+                }
                 else
-                    yield return StartCoroutine(state.Execute());
+                {
+                    // 애니메이션/액션 실행 대기 중 매 프레임 입력 시작 마감 이전의 연타를 필터링합니다.
+                    IEnumerator routine = state.Execute();
+                    while (routine.MoveNext())
+                    {
+                        if (token.IsInterrupted) yield break;
+
+                        float elapsed = Time.time - attackStartTime;
+                        // 연타 방지 대기 시간 이전의 입력은 강제로 무효화시킵니다.
+                        if (elapsed < step.inputWindowStart)
+                        {
+                            inputBuffered = false;
+                        }
+
+                        yield return routine.Current;
+                    }
+                }
             }
 
             foreach (var c in parallelCoroutines)
@@ -364,29 +382,19 @@ public class PlayerAttackController : MonoBehaviour
         if (step.isAirFinisher)
             CombatEventBus.Instance.RaiseCounter(transform);
 
-        // 다음 콤보 결정 (입력 윈도우 대기)
-        float waitStartTime = Time.time;
-        float maxWait = step.inputWindowEnd;
-
-        while (Time.time - waitStartTime < maxWait - step.inputWindowStart)
+        // 다음 콤보 결정 (애니메이션 재생이 완전히 완료된 직후 즉시 전이 여부 판단)
+        float elapsedAtEnd = Time.time - attackStartTime;
+        if (inputBuffered && step.IsInputWindowOpen(elapsedAtEnd))
         {
-            if (token.IsInterrupted) break;
+            inputBuffered = false;
 
-            float elapsed = Time.time - attackStartTime;
-            if (inputBuffered && step.IsInputWindowOpen(elapsed))
+            int nextIndex = currentStepIndex + 1;
+            if (activeComboNode != null && nextIndex < activeComboNode.comboSteps.Count)
             {
-                inputBuffered = false;
-
-                int nextIndex = currentStepIndex + 1;
-                if (activeComboNode != null && nextIndex < activeComboNode.comboSteps.Count)
-                {
-                    ResetComboStateKeepActive();
-                    StartComboStep(activeComboNode, activeInputType, nextIndex);
-                    yield break;
-                }
+                ResetComboStateKeepActive();
+                StartComboStep(activeComboNode, activeInputType, nextIndex);
+                yield break;
             }
-
-            yield return null;
         }
 
         ResetComboState();
@@ -499,12 +507,12 @@ public class PlayerAttackController : MonoBehaviour
                             
                             if (elapsed < step.inputWindowStart)
                             {
-                                // 공격 시작부터 ~ 입력 수용 시작 전 (예: 0~2초) : 빨간색 (입력 불가 대기 구간)
+                                // 공격 시작부터 ~ 입력 수용 시작 전 : 빨간색 (입력 불가 대기 구간)
                                 gizmoColor = new Color(1f, 0f, 0f, 0.8f);
                             }
-                            else if (elapsed <= step.inputWindowEnd)
+                            else
                             {
-                                // 입력 수용 구간 (예: 2~5초) : 파란색 (입력 가능 구간)
+                                // 입력 수용 시작 후 (애니메이션 완료 전까지) : 파란색 (입력 가능 구간)
                                 gizmoColor = new Color(0f, 0.3f, 1f, 0.8f);
                             }
                         }

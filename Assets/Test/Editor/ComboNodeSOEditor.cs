@@ -75,13 +75,11 @@ public class ComboNodeSOEditor : Editor
             var actionSequenceProp = stepProp.FindPropertyRelative("actionSequence");
             
             var wsStartProp = stepProp.FindPropertyRelative("inputWindowStart");
-            var wsEndProp   = stepProp.FindPropertyRelative("inputWindowEnd");
 
             string stepName = displayNameProp.stringValue;
             float wsStart   = wsStartProp.floatValue;
-            float wsEnd     = wsEndProp.floatValue;
 
-            string headerText = $"[{i + 1}타] {stepName} (윈도우 {wsStart:F2}s ~ {wsEnd:F2}s)"
+            string headerText = $"[{i + 1}타] {stepName} (연타 방지 대기: {wsStart:F2}s)"
                 + (showGizmosProp.boolValue ? " [기즈모]" : "")
                 + (showWindowGizmosProp.boolValue ? " [타이밍]" : "");
 
@@ -132,14 +130,13 @@ public class ComboNodeSOEditor : Editor
 
             // 입력 윈도우 설정
             ActionEditorStyles.DrawHeaderLayout("  ▸ 다음 입력 윈도우 설정");
-            EditorGUILayout.PropertyField(wsStartProp, new GUIContent("입력 수용 시작(초)"));
-            EditorGUILayout.PropertyField(wsEndProp,   new GUIContent("입력 마감 시간(초)"));
+            EditorGUILayout.PropertyField(wsStartProp, new GUIContent("연타 방지 최소 대기(초)"));
             
             GUILayout.Space(4);
             Rect timelineRect = GUILayoutUtility.GetRect(0, 16f, GUILayout.ExpandWidth(true));
             timelineRect.x += 15f * EditorGUI.indentLevel;
             timelineRect.width -= 15f * EditorGUI.indentLevel;
-            DrawWindowTimeline(timelineRect, wsStartProp.floatValue, wsEndProp.floatValue);
+            DrawWindowTimeline(timelineRect, wsStartProp.floatValue);
             GUILayout.Space(6);
 
             // 이동/물리 설정
@@ -217,7 +214,6 @@ public class ComboNodeSOEditor : Editor
             var newStep = _comboSteps.GetArrayElementAtIndex(_comboSteps.arraySize - 1);
             newStep.FindPropertyRelative("displayName").stringValue     = $"공격 {_comboSteps.arraySize}타";
             newStep.FindPropertyRelative("inputWindowStart").floatValue = 0.2f;
-            newStep.FindPropertyRelative("inputWindowEnd").floatValue   = 0.8f;
         }
 
         // ── 삭제/이동 처리 ──
@@ -246,24 +242,29 @@ public class ComboNodeSOEditor : Editor
             foldouts[i] = value;
     }
 
-    private void DrawWindowTimeline(Rect rect, float windowStart, float windowEnd)
+    private void DrawWindowTimeline(Rect rect, float windowStart)
     {
-        float maxTime = Mathf.Max(windowEnd * 1.2f, 1.5f);
+        float maxTime = Mathf.Max(windowStart * 1.5f, 1.5f);
 
+        // 기본 배경 (어두운 회색)
         EditorGUI.DrawRect(rect, new Color(0.12f, 0.14f, 0.18f, 1f));
 
+        // 입력 차단 구간 (연타 방지) - 붉은색
         float startX = rect.x + (windowStart / maxTime) * rect.width;
-        float endX   = rect.x + (windowEnd   / maxTime) * rect.width;
-        EditorGUI.DrawRect(new Rect(startX, rect.y, endX - startX, rect.height),
-            new Color(0.3f, 0.9f, 0.4f, 0.35f));
+        EditorGUI.DrawRect(new Rect(rect.x, rect.y, startX - rect.x, rect.height),
+            new Color(0.9f, 0.3f, 0.3f, 0.25f));
+
+        // 입력 수용 가능 구간 - 녹색
+        EditorGUI.DrawRect(new Rect(startX, rect.y, rect.xMax - startX, rect.height),
+            new Color(0.3f, 0.9f, 0.4f, 0.25f));
 
         EditorGUI.DrawRect(new Rect(rect.x, rect.y, rect.width, 1), ActionEditorStyles.DividerColor);
         EditorGUI.DrawRect(new Rect(rect.x, rect.yMax - 1, rect.width, 1), ActionEditorStyles.DividerColor);
 
         GUIStyle s = new GUIStyle(EditorStyles.miniLabel)
         { normal = { textColor = new Color(0.5f, 0.9f, 0.5f, 1f) }, alignment = TextAnchor.MiddleCenter };
-        GUI.Label(new Rect(startX, rect.y - 14f, endX - startX, 14f),
-            $"입력 수용구간 ({windowStart:F2}s ~ {windowEnd:F2}s)", s);
+        GUI.Label(new Rect(rect.x, rect.y - 14f, rect.width, 14f),
+            $"연타 방지 대기 ({windowStart:F2}s) | 이후 입력 수용 (애니메이션 완료 전까지)", s);
     }
 }
 #endif

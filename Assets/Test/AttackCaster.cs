@@ -227,7 +227,8 @@ public class AttackCaster : MonoBehaviour
         for (int i = 0; i < count; i++)
         {
             Vector3 spawnPos = transform.position + GetOrientedOffset(data.attackOffset);
-            Vector3 shootDir = transform.rotation * CapsuleController.GetDirectionFromEnum(data.moveDirection8);
+            CapsuleController controller = GetComponent<CapsuleController>();
+            Vector3 shootDir = controller != null ? controller.GetWorldDirectionFromEnum(data.moveDirection8) : transform.forward;
 
             // 매 발사 시점마다 최신 타겟 위치를 갱신
             if (data.targetType == TargetType.TrackObject && !string.IsNullOrEmpty(data.targetTag))

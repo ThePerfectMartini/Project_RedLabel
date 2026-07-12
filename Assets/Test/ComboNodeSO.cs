@@ -102,13 +102,9 @@ public class ComboStep
     [Tooltip("이 단계에서 실행할 ActionSequenceSO (이동 + 공격 + 대기 액션 포함)")]
     public ActionSequenceSO actionSequence;
 
-    [Tooltip("이 공격 시작 후 다음 입력을 받기 시작하는 시점 (초)")]
+    [Tooltip("이 공격 시작 후 다음 입력을 받기 시작하는 시점 (초). 이 시간 이전의 빠른 연타는 무시됩니다.")]
     [Range(0f, 2f)]
     public float inputWindowStart = 0.2f;
-
-    [Tooltip("이 공격 시작 후 다음 입력을 마감하는 시점 (초). 이 시간이 지나면 콤보가 리셋됩니다.")]
-    [Range(0f, 3f)]
-    public float inputWindowEnd = 0.8f;
 
     [Tooltip("이 공격 단계 실행 시 런처(공중 띄우기) 이벤트도 발행할지 여부")]
     public bool isLauncher = false;
@@ -121,7 +117,7 @@ public class ComboStep
 
     /// <summary>주어진 경과 시간이 다음 콤보 입력 윈도우 안에 있는지 확인합니다.</summary>
     public bool IsInputWindowOpen(float elapsed)
-        => elapsed >= inputWindowStart && elapsed <= inputWindowEnd;
+        => elapsed >= inputWindowStart;
 }
 
 // ═══════════════════════════════════════════════════════════════

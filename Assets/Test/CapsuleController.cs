@@ -36,7 +36,7 @@ public class CapsuleController : MonoBehaviour
         }
     }
 
-    public static Vector3 GetDirectionFromEnum(MoveDirection8 dir8)
+    public Vector3 GetWorldDirectionFromEnum(MoveDirection8 dir8)
     {
         switch (dir8)
         {
@@ -44,12 +44,15 @@ public class CapsuleController : MonoBehaviour
             case MoveDirection8.Down: return Vector3.back;
             case MoveDirection8.Left: return Vector3.left;
             case MoveDirection8.Right: return Vector3.right;
-            case MoveDirection8.UpLeft: return new Vector3(-1, 0, 1).normalized;
-            case MoveDirection8.UpRight: return new Vector3(1, 0, 1).normalized;
-            case MoveDirection8.DownLeft: return new Vector3(-1, 0, -1).normalized;
-            case MoveDirection8.DownRight: return new Vector3(1, 0, -1).normalized;
-            case MoveDirection8.Forward: return Vector3.left; // 2.5D 벨트스크롤 물리 기준 캐릭터의 앞 방향
-            case MoveDirection8.Backward: return Vector3.right; // 2.5D 벨트스크롤 물리 기준 캐릭터의 뒤 방향
+            case MoveDirection8.UpLeft: return new Vector3(-1f, 0f, 1f).normalized;
+            case MoveDirection8.UpRight: return new Vector3(1f, 0f, 1f).normalized;
+            case MoveDirection8.DownLeft: return new Vector3(-1f, 0f, -1f).normalized;
+            case MoveDirection8.DownRight: return new Vector3(1f, 0f, -1f).normalized;
+            case MoveDirection8.Forward: 
+                // 캐릭터가 오른쪽을 바라볼 때 yRotation은 180 (즉 90 초과)
+                return transform.rotation.eulerAngles.y > 90f ? Vector3.right : Vector3.left;
+            case MoveDirection8.Backward: 
+                return transform.rotation.eulerAngles.y > 90f ? Vector3.left : Vector3.right;
             default: return Vector3.zero;
         }
     }
@@ -169,9 +172,12 @@ public class CapsuleController : MonoBehaviour
 
             bool canRefresh = actionData.usePositionRefresh;
 
+            bool trackX = actionData.targetType == TargetType.ReturnToSpawn ? false : actionData.trackXOnly;
+            bool trackZ = actionData.targetType == TargetType.ReturnToSpawn ? false : actionData.trackZOnly;
+
             Vector3 initialTargetPos = isTracking ? trackingTarget.position : specificTargetPos;
-            if (actionData.trackXOnly && !actionData.trackZOnly) initialTargetPos.z = rb.position.z;
-            else if (!actionData.trackXOnly && actionData.trackZOnly) initialTargetPos.x = rb.position.x;
+            if (trackX && !trackZ) initialTargetPos.z = rb.position.z;
+            else if (!trackX && trackZ) initialTargetPos.x = rb.position.x;
             initialTargetPos.y = 0f;
 
             Vector3 startPos = rb.position;
@@ -187,8 +193,8 @@ public class CapsuleController : MonoBehaviour
                     baseTargetPos = trackingTarget.position;
                 }
 
-                if (actionData.trackXOnly && !actionData.trackZOnly) baseTargetPos.z = rb.position.z;
-                else if (!actionData.trackXOnly && actionData.trackZOnly) baseTargetPos.x = rb.position.x;
+                if (trackX && !trackZ) baseTargetPos.z = rb.position.z;
+                else if (!trackX && trackZ) baseTargetPos.x = rb.position.x;
 
                 baseTargetPos.y = 0f;
 

@@ -20,43 +20,90 @@ public struct PhaseSelectionInfo
     public string[] entryNames;
 }
 
+public enum AIPhaseState
+{
+    None,
+    Idle,
+    Combat,
+    Return,
+    Conditional
+}
+
+[Serializable]
+public class ConditionalPhase
+{
+    public string conditionName = "특수 페이즈";
+    public PhaseSO phase;
+    
+    [Header("체력 조건")]
+    public bool useHealthCondition;
+    [Tooltip("체력 비율 (0.0 ~ 1.0) 이하일 때 발동")]
+    [Range(0f, 1f)] public float healthThreshold = 0.5f;
+    
+    [Header("시간 조건")]
+    public bool useTimeCondition;
+    [Tooltip("전투 진입 후 지정된 시간(초)이 경과했을 때 발동")]
+    public float timeThreshold = 30f;
+
+    [HideInInspector] public bool hasTriggered = false;
+}
+
 /// <summary>
-/// PhaseSO를 런타임에서 실행하는 컴포넌트.
-/// 가중치 기반 시퀀스 선택 + 콤보 연쇄를 처리한다.
+/// PhaseSO를 런타임에서 실행하고 전이(상태) 머신 역할을 수행하는 핵심 컴포넌트.
 /// </summary>
 public class PhaseRunner : MonoBehaviour
 {
-    [Header("페이즈 설정")]
-    [SerializeField] private PhaseSO phase;
+    [Header("페이즈(Phase) 상태 설정")]
+    [Tooltip("플레이어 감지 전 대기/순찰할 페이즈")]
+    [SerializeField] private PhaseSO idlePhase;
+    
+    [Tooltip("플레이어 감지 시 돌입할 메인 전투 페이즈 (기존 '조절' 필드 대체)")]
+    [SerializeField] private PhaseSO combatPhase;
+    
+    [Tooltip("플레이어가 감지 범위를 벗어나 도망쳤을 때 실행할 복귀 페이즈")]
+    [SerializeField] private PhaseSO returnPhase;
+
+    [Header("감지 (Detection) 범위 설정")]
+    [Tooltip("씬 뷰에서 이 오브젝트를 선택했을 때 감지 및 도주 범위 기즈모를 표시할지 여부")]
+    [SerializeField] private bool showDetectionGizmo = true;
+    
+    [Tooltip("플레이어를 감지하여 전투 페이즈로 돌입하는 반경")]
+    [SerializeField] private float detectionRadius = 10f;
+    [Tooltip("전투 중 플레이어가 이 반경을 벗어나면 도망친 것으로 간주하고 복귀 페이즈로 전환")]
+    [SerializeField] private float escapeRadius = 15f;
+
+    [Header("조건부 특수 페이즈 (체력/시간)")]
+    [SerializeField] private List<ConditionalPhase> conditionalPhases = new List<ConditionalPhase>();
+
+    [Header("실행 설정")]
     [SerializeField] private bool playOnStart = true;
 
     [Header("참조")]
     [SerializeField] private CapsuleController controller;
 
     // ── 런타임 상태 ──
+    private PhaseSO currentPhase;
+    private AIPhaseState currentState = AIPhaseState.None;
+    private float combatStartTime = 0f;
+
+    // 외부에서 체력을 연동해 주어야 하는 변수 (기본값 1.0 = 100%)
+    public float CurrentHealthRatio { get; set; } = 1f;
+
     private int lastSelectedIndex = -1;
     public int LastSelectedIndex => lastSelectedIndex;
     private bool isRunning;
     private ActionData currentExecutingAction;
     public ActionData CurrentExecutingAction => currentExecutingAction;
 
-    // ── 중단 토큰 ──
     private InterruptToken currentToken;
-
-    // ── 타겟 캐싱 ──
     private Transform cachedTarget;
-
-    /// <summary>
-    /// 패턴이 선택될 때마다 발행되는 이벤트 (디버그 모니터 연동용)
-    /// </summary>
-    public event Action<PhaseSelectionInfo> OnSequenceSelected;
     
-    // ── 콤보 판정용 ──
+    // ── 초기 위치 기록용 ──
+    private Transform spawnPointTransform;
+
+    public event Action<PhaseSelectionInfo> OnSequenceSelected;
     private bool hitConfirmed;
-
-    // AttackCaster 참조 (캐싱)
     private AttackCaster attackCaster;
-
     private float FacingSignX => Mathf.Abs(Mathf.DeltaAngle(transform.eulerAngles.y, 180f)) < 90f ? 1f : -1f;
 
     private Vector3 GetOrientedOffset(Vector3 offset)
@@ -64,47 +111,145 @@ public class PhaseRunner : MonoBehaviour
         return new Vector3(offset.x * FacingSignX, offset.y, offset.z);
     }
 
-
     private void Awake()
     {
-        if (!controller)
-            controller = GetComponent<CapsuleController>();
-
+        if (!controller) controller = GetComponent<CapsuleController>();
         attackCaster = GetComponent<AttackCaster>();
     }
 
     private void Start()
     {
+        // 시작 시 X, Z 위치를 기록하기 위해 투명한 빈 게임오브젝트(가짜 타겟)를 하나 생성합니다.
+        GameObject spawnDummy = new GameObject($"{gameObject.name}_SpawnPoint");
+        spawnDummy.transform.position = transform.position;
+        spawnPointTransform = spawnDummy.transform;
+
         CacheTarget();
-        // ── PhaseManager가 부착되어 있다면 매니저가 주도권을 갖고 첫 페이즈를 기동하므로 이중 시작을 억제합니다. ──
-        if (playOnStart && phase && !GetComponent<PhaseManager>())
+        
+        if (playOnStart && !GetComponent<PhaseManager>())
+        {
+            // 게임 시작 시 기본 대기 상태로 시작
+            ChangeState(AIPhaseState.Idle);
+        }
+    }
+
+    private void Update()
+    {
+        if (!Application.isPlaying) return;
+
+        // 1. 상태 전이용 진짜 플레이어와의 거리를 잰다.
+        Transform actualPlayer = null;
+        if (combatPhase != null && !string.IsNullOrEmpty(combatPhase.targetTag))
+            actualPlayer = CombatTargetRegistry.GetFirst(combatPhase.targetTag);
+
+        float distance = actualPlayer ? Vector3.Distance(transform.position, actualPlayer.position) : float.MaxValue;
+
+        // 2. ActionSequence가 바라볼 가짜/진짜 타겟을 업데이트한다.
+        CacheTarget();
+
+        // 상시로 조건부 페이즈 검사
+        CheckConditionalPhases();
+
+        // AI 상태에 따른 전이 로직
+        switch (currentState)
+        {
+            case AIPhaseState.Idle:
+                if (distance <= detectionRadius)
+                    ChangeState(AIPhaseState.Combat);
+                break;
+
+            case AIPhaseState.Combat:
+                if (distance > escapeRadius)
+                    ChangeState(AIPhaseState.Return);
+                break;
+
+            case AIPhaseState.Return:
+                // 복귀 중이라도 다시 플레이어가 가까이 오면 즉시 전투
+                if (distance <= detectionRadius)
+                    ChangeState(AIPhaseState.Combat);
+                break;
+
+            case AIPhaseState.Conditional:
+                // 특수 페이즈는 스스로 끝나기를 기다림 (루프 종료 시 자동 전투 복귀)
+                break;
+        }
+    }
+
+    private void CheckConditionalPhases()
+    {
+        if (conditionalPhases == null) return;
+
+        foreach (var cp in conditionalPhases)
+        {
+            if (cp.hasTriggered || cp.phase == null) continue;
+
+            bool triggered = false;
+
+            if (cp.useHealthCondition && CurrentHealthRatio <= cp.healthThreshold)
+                triggered = true;
+
+            if (!triggered && cp.useTimeCondition && currentState == AIPhaseState.Combat)
+            {
+                if (Time.time - combatStartTime >= cp.timeThreshold)
+                    triggered = true;
+            }
+
+            if (triggered)
+            {
+                cp.hasTriggered = true;
+                ChangeState(AIPhaseState.Conditional, cp.phase);
+                return; // 한 번에 하나씩만
+            }
+        }
+    }
+
+    public void ChangeState(AIPhaseState newState, PhaseSO overridePhase = null)
+    {
+        if (currentState == newState && overridePhase == null) return;
+
+        currentState = newState;
+        StopPhase();
+
+        PhaseSO nextPhase = null;
+        switch (currentState)
+        {
+            case AIPhaseState.Idle: 
+                nextPhase = idlePhase; 
+                break;
+            case AIPhaseState.Combat: 
+                nextPhase = combatPhase; 
+                combatStartTime = Time.time; 
+                break;
+            case AIPhaseState.Return: 
+                nextPhase = returnPhase; 
+                break;
+            case AIPhaseState.Conditional: 
+                nextPhase = overridePhase; 
+                break;
+        }
+
+        if (nextPhase != null)
+        {
+            currentPhase = nextPhase;
+            lastSelectedIndex = -1;
+            CacheTarget(); // 상태 변경 시 타겟 재설정
             StartPhase();
+        }
+        else
+        {
+            currentPhase = null;
+        }
     }
 
-    // ── 타겟 캐싱 ──
-    private void CacheTarget()
+    // 외부 API
+    public void SetPhase(PhaseSO newPhase)
     {
-        if (!phase || string.IsNullOrEmpty(phase.targetTag)) return;
-        // CombatTargetRegistry로 FindWithTag 대체
-        cachedTarget = CombatTargetRegistry.GetFirst(phase.targetTag);
+        ChangeState(AIPhaseState.Conditional, newPhase);
     }
 
-    private void OnEnable()
-    {
-        if (attackCaster)
-            attackCaster.OnHitConfirmed += HandleHitConfirmed;
-    }
-
-    private void OnDisable()
-    {
-        if (attackCaster)
-            attackCaster.OnHitConfirmed -= HandleHitConfirmed;
-    }
-
-    // ── 외부 API ──
     public void StartPhase()
     {
-        if (isRunning) return;
+        if (isRunning || currentPhase == null) return;
         StartCoroutine(PhaseLoop());
     }
 
@@ -115,87 +260,79 @@ public class PhaseRunner : MonoBehaviour
         StopAllCoroutines();
     }
 
-    /// <summary>
-    /// 현재 실행 중인 시퀀스를 안전하게 중단합니다.
-    /// 그로기 진입 / 페이즈 전환 시 외부에서 호출하세요.
-    /// </summary>
     public void InterruptCurrentSequence(InterruptReason reason = InterruptReason.External)
     {
         currentToken?.Interrupt(reason);
     }
 
-    /// <summary>
-    /// 런타임에서 페이즈 SO를 교체합니다 (PhaseManager 연동용).
-    /// </summary>
-    public void SetPhase(PhaseSO newPhase)
+    private void CacheTarget()
     {
-        phase = newPhase;
-        lastSelectedIndex = -1;
-        CacheTarget();
+        // **매직 트릭**: 복귀(Return) 상태일 때는 플레이어가 아닌, 시작 시점에 기록해둔 스폰 더미를 타겟으로 둔갑시킵니다.
+        if (currentState == AIPhaseState.Return)
+        {
+            cachedTarget = spawnPointTransform;
+            return;
+        }
+
+        // 그 외 상태(대기, 전투)일 때는 정상적으로 플레이어를 타겟으로 삼습니다.
+        if (combatPhase != null && !string.IsNullOrEmpty(combatPhase.targetTag))
+            cachedTarget = CombatTargetRegistry.GetFirst(combatPhase.targetTag);
     }
 
-    // ── 타격 성공 콜백 ──
+    private void OnEnable()
+    {
+        if (attackCaster) attackCaster.OnHitConfirmed += HandleHitConfirmed;
+    }
+
+    private void OnDisable()
+    {
+        if (attackCaster) attackCaster.OnHitConfirmed -= HandleHitConfirmed;
+    }
+
     private void HandleHitConfirmed()
     {
         hitConfirmed = true;
     }
 
-    // ═══════════════════════════════════════════════════════════
-    // 메인 페이즈 루프
-    // ═══════════════════════════════════════════════════════════
     private IEnumerator PhaseLoop()
     {
         isRunning = true;
         int repeatDone = 0;
 
-        while (isRunning && (phase.isInfiniteLoop || repeatDone < phase.repeatCount))
+        while (isRunning && currentPhase != null && (currentPhase.isInfiniteLoop || repeatDone < currentPhase.repeatCount))
         {
-            // 1) 가중치 기반으로 엔트리 선택
             int selectedIndex = SelectEntryByWeight();
             if (selectedIndex < 0)
             {
-                Debug.LogWarning("[PhaseRunner] 선택 가능한 엔트리가 없습니다.");
                 yield return new WaitForSeconds(0.5f);
                 continue;
             }
 
-            PhaseEntry entry = phase.entries[selectedIndex];
+            PhaseEntry entry = currentPhase.entries[selectedIndex];
             lastSelectedIndex = selectedIndex;
 
-            // 2) 선택된 시퀀스 실행
             yield return StartCoroutine(ExecuteActionSequence(entry.actionSequence));
 
-            // 3) 콤보 처리
             if (entry.isComboStarter && entry.comboFollowUps != null && entry.comboFollowUps.Count > 0)
             {
-                // 콤보 시작 시퀀스 실행 후 타격 성공 여부 확인
                 if (hitConfirmed)
                 {
-                    // 후속 콤보 시퀀스들을 순차 실행
                     for (int c = 0; c < entry.comboFollowUps.Count; c++)
                     {
                         ActionSequenceSO followUp = entry.comboFollowUps[c];
                         if (followUp == null) continue;
 
-                        hitConfirmed = false; // 다음 콤보를 위해 리셋
-
+                        hitConfirmed = false;
                         yield return StartCoroutine(ExecuteActionSequence(followUp));
 
-                        // 마지막 후속 콤보가 아니라면, 이번 타격도 성공해야 다음 콤보 진행
                         if (c < entry.comboFollowUps.Count - 1 && !hitConfirmed)
-                        {
-                            // 타격 실패 → 콤보 끊김
                             break;
-                        }
                     }
                 }
-
-                // 콤보 종료 후 리셋
                 hitConfirmed = false;
             }
             else
             {
-                // 비콤보 엔트리는 히트 플래그 리셋
                 hitConfirmed = false;
             }
 
@@ -203,39 +340,41 @@ public class PhaseRunner : MonoBehaviour
         }
 
         isRunning = false;
+
+        // 페이즈 반복 완전 종료 후 자동 전이
+        if (currentState == AIPhaseState.Return)
+        {
+            ChangeState(AIPhaseState.Idle);
+        }
+        else if (currentState == AIPhaseState.Conditional)
+        {
+            ChangeState(AIPhaseState.Combat);
+        }
     }
 
-    // ═══════════════════════════════════════════════════════════
-    // 가중치 기반 선택
-    // ═══════════════════════════════════════════════════════════
     private int SelectEntryByWeight()
     {
-        if (phase.entries == null || phase.entries.Count == 0) return -1;
+        if (currentPhase == null || currentPhase.entries == null || currentPhase.entries.Count == 0) return -1;
 
         Vector3 relPos = GetRelativePositionToPlayer();
         float distanceToPlayer = relPos.magnitude;
         float totalWeight = 0f;
 
-        // 각 엔트리별 최종 가중치 계산
-        float[] weights = new float[phase.entries.Count];
-        string[] names = new string[phase.entries.Count];
+        float[] weights = new float[currentPhase.entries.Count];
+        string[] names = new string[currentPhase.entries.Count];
 
-        for (int i = 0; i < phase.entries.Count; i++)
+        for (int i = 0; i < currentPhase.entries.Count; i++)
         {
-            PhaseEntry entry = phase.entries[i];
+            PhaseEntry entry = currentPhase.entries[i];
             names[i] = entry.actionSequence ? entry.actionSequence.name : "(없음)";
             if (!entry.actionSequence) continue;
 
             float w = entry.baseWeight;
-
-            // 거리 기반 곱수
             w *= entry.EvaluateDistanceMultiplier(relPos, transform.forward);
 
-            // 반복 패널티
             if (i == lastSelectedIndex)
-                w *= phase.repeatPenalty;
+                w *= currentPhase.repeatPenalty;
 
-            // 음수 방지
             w = Mathf.Max(0f, w);
 
             weights[i] = w;
@@ -244,12 +383,10 @@ public class PhaseRunner : MonoBehaviour
 
         if (totalWeight <= 0f) return -1;
 
-        // 확률 배열 계산
         float[] probs = new float[weights.Length];
         for (int i = 0; i < weights.Length; i++)
             probs[i] = weights[i] / totalWeight;
 
-        // 룰렛 휠 선택
         float roll = UnityEngine.Random.Range(0f, totalWeight);
         float cumulative = 0f;
         int selected = weights.Length - 1;
@@ -264,7 +401,6 @@ public class PhaseRunner : MonoBehaviour
             }
         }
 
-        // 선택 이벤트 발행
         OnSequenceSelected?.Invoke(new PhaseSelectionInfo
         {
             time = Time.time,
@@ -282,16 +418,11 @@ public class PhaseRunner : MonoBehaviour
         return selected;
     }
 
-    // ═══════════════════════════════════════════════════════════
-    // 액션 시퀀스 실행 (CapsuleController의 기존 로직 재활용)
-    // ═══════════════════════════════════════════════════════════
     private IEnumerator ExecuteActionSequence(ActionSequenceSO sequence)
     {
         if (!sequence || !controller) yield break;
 
-        // 매 시퀀스마다 새 토큰 생성
         currentToken = new InterruptToken();
-
         var parallelCoroutines = new System.Collections.Generic.List<Coroutine>();
 
         foreach (var action in sequence.actions)
@@ -307,7 +438,6 @@ public class PhaseRunner : MonoBehaviour
             ActionState state = CreateState(action, currentToken);
             if (state == null) continue;
 
-            // 공격 액션이면 hitConfirmed 리셋
             if (action is AttackActionData)
                 hitConfirmed = false;
 
@@ -322,7 +452,6 @@ public class PhaseRunner : MonoBehaviour
             }
         }
 
-        // 병렬 실행 코루틴 완료 대기
         foreach (var c in parallelCoroutines)
         {
             if (c != null) yield return c;
@@ -343,14 +472,10 @@ public class PhaseRunner : MonoBehaviour
         };
     }
 
-    // ═══════════════════════════════════════════════════════════
-    // 유틸
-    // ═══════════════════════════════════════════════════════════
     private Vector3 GetRelativePositionToPlayer()
     {
-        if (!phase || string.IsNullOrEmpty(phase.targetTag)) return Vector3.zero;
+        if (combatPhase == null || string.IsNullOrEmpty(combatPhase.targetTag)) return Vector3.zero;
 
-        // 캐싱된 타겟 우선 사용 → FindWithTag 주기 최소화
         if (!cachedTarget)
         {
             CacheTarget();
@@ -362,43 +487,51 @@ public class PhaseRunner : MonoBehaviour
         return diff;
     }
 
-    // ═══════════════════════════════════════════════════════════
-    // 기즈모 (씬 뷰 + 플레이 모드 모두 표시)
-    // ═══════════════════════════════════════════════════════════
     private static readonly Color[] GizmoColors =
     {
-        new Color(1f,  0.3f, 0.3f, 1f),  // 빨강
-        new Color(0.3f, 0.7f, 1f,  1f),  // 파랑
-        new Color(0.3f, 1f,  0.3f, 1f),  // 초록
-        new Color(1f,  0.85f, 0.1f, 1f), // 노랑
-        new Color(0.8f, 0.3f, 1f,  1f),  // 보라
-        new Color(1f,  0.55f, 0.1f, 1f), // 주황
+        new Color(1f,  0.3f, 0.3f, 1f),
+        new Color(0.3f, 0.7f, 1f,  1f),
+        new Color(0.3f, 1f,  0.3f, 1f),
+        new Color(1f,  0.85f, 0.1f, 1f),
+        new Color(0.8f, 0.3f, 1f,  1f),
+        new Color(1f,  0.55f, 0.1f, 1f),
     };
+
+    private void OnDrawGizmosSelected()
+    {
+        if (showDetectionGizmo)
+        {
+            // 1. 감지 범위 기즈모
+            Gizmos.color = new Color(1f, 0.6f, 0f, 0.3f); // 주황색 반투명
+            DrawGizmoCircle(transform.position, detectionRadius);
+            
+            Gizmos.color = new Color(0.5f, 0.5f, 0.5f, 0.3f); // 회색 반투명
+            DrawGizmoCircle(transform.position, escapeRadius);
+        }
+    }
 
     private void OnDrawGizmos()
     {
-        if (!phase) return;
+        // 2. 공격 범위 기즈모 (현재 페이즈 우선, 없으면 전투 페이즈)
+        PhaseSO phaseToDraw = Application.isPlaying ? currentPhase : combatPhase;
+        if (!phaseToDraw) return;
 
-        for (int i = 0; i < phase.entries.Count; i++)
+        for (int i = 0; i < phaseToDraw.entries.Count; i++)
         {
-            PhaseEntry entry = phase.entries[i];
+            PhaseEntry entry = phaseToDraw.entries[i];
             Color col = GizmoColors[i % GizmoColors.Length];
 
-            // 메인 시퀀스 공격 기즈모
             if (entry.showGizmos && entry.actionSequence)
             {
                 foreach (var action in entry.actionSequence.actions)
                     DrawActionGizmo(action, col);
             }
 
-            // 거리 범위 기즈모
             if (entry.showRangeGizmo)
                 DrawRangeGizmo(entry, col);
 
-            // 콤보 후속 시퀀스 기즈모 (각각 독립 토글)
             if (entry.comboFollowUps != null)
             {
-                // 후속은 같은 색이지만 조금 더 투명하게 구분
                 Color comboCol = new Color(col.r, col.g, col.b, col.a * 0.6f);
                 for (int j = 0; j < entry.comboFollowUps.Count; j++)
                 {
@@ -418,19 +551,14 @@ public class PhaseRunner : MonoBehaviour
 
     private void DrawActionGizmo(ActionData action, Color color)
     {
-        // 공격 액션이 아니면 기즈모 없음
         if (action is not AttackActionData atkData) return;
 
-        // 공격 타이밍에 하늘색 기즈모를 파란색 기즈모로 동적 하이라이트
         if (Application.isPlaying && attackCaster && attackCaster.IsGizmoHighlighted)
         {
             if (currentExecutingAction == action)
-            {
-                color = new Color(0f, 0.4f, 1f, 1f); // 파란색 강조
-            }
+                color = new Color(0f, 0.4f, 1f, 1f);
         }
 
-        // 원거리: 발사 지점만 작은 구로 표시
         if (atkData is RangedAttackActionData rangedData)
         {
             Gizmos.color = new Color(color.r, color.g, color.b, 0.8f);
@@ -499,8 +627,6 @@ public class PhaseRunner : MonoBehaviour
         }
     }
 
-    // ─── 거리 범위 기즈모 ───────────────────────────────────────
-
     private void DrawRangeGizmo(PhaseEntry entry, Color color)
     {
         if (entry.distanceMode == DistanceWeightMode.Constant) return;
@@ -513,7 +639,6 @@ public class PhaseRunner : MonoBehaviour
         {
             case DistanceWeightMode.CloseRange:
             case DistanceWeightMode.FarRange:
-                // 최소 거리: 반투명 링, 최대 거리: 진한 링
                 Gizmos.color = new Color(color.r, color.g, color.b, 0.3f);
                 DrawGizmoCircle(origin, minD);
                 Gizmos.color = new Color(color.r, color.g, color.b, 0.85f);
@@ -532,33 +657,25 @@ public class PhaseRunner : MonoBehaviour
         }
     }
 
-    /// <summary>X축 돌진 모드: Z 정렬 통로 + X 거리 범위를 고통로 표시</summary>
     private void DrawXAxisRangeCorridor(Vector3 origin, float minD, float maxD, float alignT, Color color)
     {
-        // Z 정렬 경계선 (상/하 수평선)
         Gizmos.color = new Color(color.r, color.g, color.b, 0.75f);
         Gizmos.DrawLine(origin + new Vector3(-maxD, 0f, -alignT), origin + new Vector3(+maxD, 0f, -alignT));
         Gizmos.DrawLine(origin + new Vector3(-maxD, 0f, +alignT), origin + new Vector3(+maxD, 0f, +alignT));
-        // X 최대 거리 경계선 (좌/우 수직선)
         Gizmos.DrawLine(origin + new Vector3(-maxD, 0f, -alignT), origin + new Vector3(-maxD, 0f, +alignT));
         Gizmos.DrawLine(origin + new Vector3(+maxD, 0f, -alignT), origin + new Vector3(+maxD, 0f, +alignT));
-        // X 최소 거리 경계선 (안직선, 더 희리)
         Gizmos.color = new Color(color.r, color.g, color.b, 0.3f);
         Gizmos.DrawLine(origin + new Vector3(-minD, 0f, -alignT), origin + new Vector3(-minD, 0f, +alignT));
         Gizmos.DrawLine(origin + new Vector3(+minD, 0f, -alignT), origin + new Vector3(+minD, 0f, +alignT));
     }
 
-    /// <summary>Z축 기습 모드: X 정렬 통로 + Z 거리 범위를 고통로 표시</summary>
     private void DrawZAxisRangeCorridor(Vector3 origin, float minD, float maxD, float alignT, Color color)
     {
-        // X 정렬 경계선 (좌/우 수직선)
         Gizmos.color = new Color(color.r, color.g, color.b, 0.75f);
         Gizmos.DrawLine(origin + new Vector3(-alignT, 0f, -maxD), origin + new Vector3(-alignT, 0f, +maxD));
         Gizmos.DrawLine(origin + new Vector3(+alignT, 0f, -maxD), origin + new Vector3(+alignT, 0f, +maxD));
-        // Z 최대 거리 경계선 (상/하 수평선)
         Gizmos.DrawLine(origin + new Vector3(-alignT, 0f, -maxD), origin + new Vector3(+alignT, 0f, -maxD));
         Gizmos.DrawLine(origin + new Vector3(-alignT, 0f, +maxD), origin + new Vector3(+alignT, 0f, +maxD));
-        // Z 최소 거리 경계선 (안직선, 더 희리)
         Gizmos.color = new Color(color.r, color.g, color.b, 0.3f);
         Gizmos.DrawLine(origin + new Vector3(-alignT, 0f, -minD), origin + new Vector3(+alignT, 0f, -minD));
         Gizmos.DrawLine(origin + new Vector3(-alignT, 0f, +minD), origin + new Vector3(+alignT, 0f, +minD));

@@ -1,0 +1,95 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 862587ca3bdf47cbbc0bc89990afa31f, type: 3}
+  m_Name: NewActionSequence
+  m_EditorClassIdentifier: Assembly-CSharp::ActionSequenceSO
+  actions:
+  - rid: 6998320162987573342
+  - rid: 6998320162987573341
+  references:
+    version: 2
+    RefIds:
+    - rid: 6998320162987573341
+      type: {class: AttackActionData, ns: , asm: Assembly-CSharp}
+      data:
+        showGizmo: 0
+        executeParallel: 1
+        playAnimation: 1
+        animationName: Attack 3
+        isSuperArmor: 0
+        isInvincible: 0
+        isFixedAttack: 0
+        targetType: 0
+        targetPosition: {x: 0, y: 0, z: 0}
+        targetTag: 
+        damage: 10
+        knockbackForce: {x: 15, y: 5, z: 0}
+        attackShape: 1
+        attackRadius: 1.5
+        attackHeight: 2
+        attackHitBoxSize: {x: 2.4, y: 1, z: 2}
+        attackOffset: {x: 1, y: 0, z: 0}
+        hitStunDuration: 0.15
+        hitStopDuration: 0
+        staggerValue: 10
+        isLauncher: 0
+        canBeParried: 1
+        isUnblockable: 0
+        castDamageOnStart: 0
+        useJumpInAttack: 0
+        attackJumpForce: 5
+        isContinuousAttack: 0
+        continuousDuration: 2
+        hitTickCooldown: 1
+    - rid: 6998320162987573342
+      type: {class: MoveActionData, ns: , asm: Assembly-CSharp}
+      data:
+        showGizmo: 0
+        executeParallel: 1
+        playAnimation: 0
+        animationName: Walk
+        isSuperArmor: 0
+        isInvincible: 0
+        isTeleport: 0
+        useJump: 0
+        jumpForce: 5
+        targetType: 2
+        targetPosition: {x: 1, y: 0, z: 0}
+        targetTag: 
+        moveDirection8: 9
+        trackXOnly: 0
+        trackZOnly: 0
+        targetOffset: {x: 0, y: 0, z: 0}
+        usePositionRefresh: 0
+        positionRefreshInterval: 0.5
+        repeatRefreshUntilReached: 1
+        refreshRepeatCount: 3
+        startSpeed: 0
+        speed: 15
+        useAcceleration: 0
+        acceleration: 2
+        useStartEase: 0
+        startEaseType: 1
+        startEaseExponent: 2
+        startEaseDuration: 0.2
+        stopOnDestinationReached: 0
+        destinationStopDistance: 0.1
+        stopOnTargetDetected: 0
+        detectOrigin: 0
+        detectShape: 0
+        detectOffset: {x: 0, y: 0, z: 0}
+        detectRadius: 1.5
+        detectBoxSize: {x: 2, y: 2, z: 2}
+        stopOnTimeLimit: 1
+        timeLimit: 0.2
+        allowSlideAfterAction: 0
+        use8DirectionMovement: 1

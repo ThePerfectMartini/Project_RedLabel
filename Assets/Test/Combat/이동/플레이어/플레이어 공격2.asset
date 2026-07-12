@@ -23,7 +23,7 @@ MonoBehaviour:
         showGizmo: 0
         executeParallel: 0
         playAnimation: 1
-        animationName: Attack
+        animationName: Test Attack 2
         isSuperArmor: 0
         isInvincible: 0
         isFixedAttack: 0
@@ -31,19 +31,19 @@ MonoBehaviour:
         targetPosition: {x: 0, y: 0, z: 0}
         targetTag: 
         damage: 10
-        knockbackForce: {x: 15, y: 5, z: 15}
-        attackShape: 1
-        attackRadius: 1.5
-        attackHeight: 2
-        attackHitBoxSize: {x: 5, y: 1, z: 2}
+        knockbackForce: {x: 2, y: 0, z: 0}
+        attackShape: 0
+        attackRadius: 2
+        attackHeight: 3
+        attackHitBoxSize: {x: 2, y: 2, z: 2}
         attackOffset: {x: 1, y: 0, z: 0}
-        hitStunDuration: 0.15
+        hitStunDuration: 0.3
         hitStopDuration: 0
         staggerValue: 10
         isLauncher: 0
         canBeParried: 1
         isUnblockable: 0
-        castDamageOnStart: 1
+        castDamageOnStart: 0
         useJumpInAttack: 0
         attackJumpForce: 5
         isContinuousAttack: 0

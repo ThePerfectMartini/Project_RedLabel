@@ -6,7 +6,7 @@ using UnityEngine;
 // ═══════════════════════════════════════════════════════════════
 
 public enum ActionType        { Move, Wait, VariableAttack, FixedAttack, RangedAttack }
-public enum TargetType        { SpecificPosition, TrackObject, Direction }
+public enum TargetType        { SpecificPosition, TrackObject, Direction, ReturnToSpawn }
 public enum MoveDirection8    { None, Up, Down, Left, Right, UpLeft, UpRight, DownLeft, DownRight, Forward, Backward }
 public enum EaseType          { EaseIn, EaseOut }
 public enum DetectOrigin      { Self, Target }

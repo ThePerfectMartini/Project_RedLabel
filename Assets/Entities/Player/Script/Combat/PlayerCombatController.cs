@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 using System.Collections;
 
 public class PlayerCombatController : MonoBehaviour
@@ -37,15 +37,18 @@ public class PlayerCombatController : MonoBehaviour
             enemyLayer
         );
 
+        PlayerMovementController movement = GetComponent<PlayerMovementController>();
+        // 플레이어가 바라보는 방향(FacingDirection)을 기준으로 무조건 X축 방향 설정
+        float facingDir = movement ? movement.FacingDirection : Mathf.Sign(transform.right.x);
+        Vector3 pushDirection = new Vector3(facingDir, 0f, 0f) * currentAttack.knockbackPower;
+        Vector3 upwardForce = Vector3.up * currentAttack.launchPower;
+
         foreach (Collider collider in hitEnemies)
         {
             Entity targetEntity = collider.GetComponent<Entity>();
             
-            if (targetEntity != null)
+            if (targetEntity)
             {
-                Vector3 pushDirection = transform.right * currentAttack.knockbackPower;
-                Vector3 upwardForce = Vector3.up * currentAttack.launchPower;
-
                 HitData attackData = new HitData
                 {
                     damage = currentAttack.damage,

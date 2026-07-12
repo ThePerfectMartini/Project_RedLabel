@@ -184,21 +184,21 @@ public class ActionDataDrawer : PropertyDrawer
         ActionEditorStyles.DrawHeader(ref rect, "▶ 목표 기준 설정");
         var targetTypeProp = GetProp(prop, "targetType");
         DrawPopup(ref rect, targetTypeProp, "목표 기준",
-            new[] { "지정 좌표", "오브젝트 추적", "특정 방향 고정" });
+            new[] { "지정 좌표", "오브젝트 추적", "특정 방향 고정", "복귀 (스폰 위치)" });
 
         TargetType targetType = (TargetType)targetTypeProp.enumValueIndex;
         if (targetType == TargetType.SpecificPosition)
             DrawXZField(ref rect, prop, "targetPosition", "지정 좌표");
         else if (targetType == TargetType.Direction)
             DrawProp(ref rect, prop, "moveDirection8", "이동 방향");
-        else
+        else if (targetType == TargetType.TrackObject)
         {
             DrawProp(ref rect, prop, "targetTag",  "추적할 타겟 태그");
             DrawProp(ref rect, prop, "trackXOnly", "X축만 추적");
             DrawProp(ref rect, prop, "trackZOnly", "Z축만 추적");
         }
-
-        if (targetType != TargetType.Direction)
+        
+        if (targetType != TargetType.Direction && targetType != TargetType.ReturnToSpawn)
         {
             ActionEditorStyles.DrawHeader(ref rect, "▶ 타겟팅 부가 설정");
             DrawXZField(ref rect, prop, "targetOffset", "목표 오프셋");
@@ -280,14 +280,14 @@ public class ActionDataDrawer : PropertyDrawer
             h += GetFieldHeight(prop, "targetPosition");
         else if (tt == TargetType.Direction)        
             h += GetFieldHeight(prop, "moveDirection8");
-        else
+        else if (tt == TargetType.TrackObject)
         {
             h += GetFieldHeight(prop, "targetTag");
             h += GetFieldHeight(prop, "trackXOnly");
             h += GetFieldHeight(prop, "trackZOnly");
         }
 
-        if (tt != TargetType.Direction)
+        if (tt != TargetType.Direction && tt != TargetType.ReturnToSpawn)
         {
             h += ActionEditorStyles.HeaderHeight; // 타겟팅 부가 설정 header
             h += GetFieldHeight(prop, "targetOffset");
